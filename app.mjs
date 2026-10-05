@@ -239,7 +239,7 @@ elements.connectForm.addEventListener("submit", async (event) => {
   }
 });
 
-elements.searchInput.addEventListener("input", applyFilter);
+elements.connectButton.addEventListener("click", () => elements.connectForm.requestSubmit()); elements.searchInput.addEventListener("input", applyFilter);
 elements.moreButton.addEventListener("click", () => {
   state.visibleCount += PAGE_SIZE;
   renderList();
