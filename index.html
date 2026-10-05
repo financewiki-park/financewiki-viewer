@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b6bcb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101820" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com; img-src 'self' data: blob: https:; style-src 'self'; script-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; frame-src 'none'">
+  <title>FinanceWiki</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./viewer.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button id="homeButton" class="brand" type="button" aria-label="문서 목록으로 이동">FinanceWiki</button>
+    <button id="settingsButton" class="icon-button" type="button" aria-label="GitHub 연결 설정">설정</button>
+  </header>
+
+  <main>
+    <section id="connectScreen" class="panel connect-panel" aria-labelledby="connectTitle">
+      <p class="eyebrow">Private repository viewer</p>
+      <h1 id="connectTitle">GitHub 연결</h1>
+      <p class="muted">저장소 전체가 아니라 경량 인덱스와 선택한 문서만 가져옵니다.</p>
+      <form id="connectForm" autocomplete="off">
+        <label>Owner<input id="ownerInput" name="owner" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
+        <label>Repository<input id="repositoryInput" name="repository" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
+        <label>Branch<input id="branchInput" name="branch" inputmode="text" autocapitalize="none" spellcheck="false" value="main" required></label>
+        <label>Personal Access Token<input id="tokenInput" name="token" type="password" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+        <label class="check-row"><input id="rememberInput" name="remember" type="checkbox" checked><span>이 기기에 저장</span></label>
+        <p class="security-note">Fine-grained token · 이 저장소만 · Contents: Read-only</p>
+        <button id="connectButton" class="primary-button" type="submit">연결 테스트 및 열기</button>
+      </form>
+    </section>
+
+    <section id="browserScreen" class="browser-screen" hidden>
+      <div class="search-wrap">
+        <label class="sr-only" for="searchInput">문서 검색</label>
+        <input id="searchInput" type="search" placeholder="제목·별칭·경로 검색" autocomplete="off">
+      </div>
+      <div class="list-summary">
+        <span id="documentCount"></span>
+        <span id="repositoryStatus" class="muted"></span>
+      </div>
+      <ol id="documentList" class="document-list"></ol>
+      <button id="moreButton" class="secondary-button" type="button" hidden>더 보기</button>
+    </section>
+
+    <article id="viewerScreen" class="viewer-screen" hidden>
+      <nav class="document-nav" aria-label="문서 탐색">
+        <button id="backToListButton" class="secondary-button compact" type="button">목록</button>
+        <span id="documentPath" class="document-path"></span>
+      </nav>
+      <div id="documentLoading" class="loading" hidden>문서를 불러오는 중…</div>
+      <div id="documentContent" class="markdown-body"></div>
+    </article>
+
+    <section id="errorPanel" class="error-panel" role="alert" hidden>
+      <strong id="errorTitle">문서를 불러오지 못했습니다.</strong>
+      <p id="errorMessage"></p>
+      <button id="retryButton" class="secondary-button" type="button">다시 시도</button>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-heading"><h2>연결 설정</h2><button value="cancel" class="icon-button" aria-label="닫기">닫기</button></div>
+      <dl class="connection-details">
+        <div><dt>상태</dt><dd id="connectionState">연결 안 됨</dd></div>
+        <div><dt>Repository</dt><dd id="connectionRepository">-</dd></div>
+        <div><dt>Branch</dt><dd id="connectionBranch">-</dd></div>
+      </dl>
+      <button id="reconfigureButton" value="cancel" class="secondary-button" type="button">토큰·저장소 변경</button>
+      <button id="deleteCredentialsButton" value="cancel" class="danger-button" type="button">저장된 인증정보와 문서 캐시 삭제</button>
+      <p class="security-note">토큰 원문은 설정 화면에 다시 표시하지 않습니다.</p>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

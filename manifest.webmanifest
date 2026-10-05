@@ -1,0 +1,18 @@
+{
+  "name": "FinanceWiki Viewer",
+  "short_name": "FinanceWiki",
+  "description": "Private FinanceWiki 문서를 필요한 때만 불러오는 모바일 Viewer",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#0b6bcb",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
