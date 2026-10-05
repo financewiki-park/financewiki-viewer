@@ -1,7 +1,6 @@
 import { encodeContentPath, normalizeRepositoryPath } from "./path-utils.mjs";
 
 const API_ROOT = "https://api.github.com";
-const API_VERSION = "2026-03-10";
 
 export class GitHubRequestError extends Error {
   constructor(message, status = 0) {
@@ -71,7 +70,6 @@ export class GitHubProvider {
         headers: {
           Accept: accept,
           Authorization: `Bearer ${token}`,
-          "X-GitHub-Api-Version": API_VERSION,
         },
         cache: "no-store",
         credentials: "omit",
