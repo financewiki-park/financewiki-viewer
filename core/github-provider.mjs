@@ -1,6 +1,14 @@
 import { encodeContentPath, normalizeRepositoryPath } from "./path-utils.mjs";
 
 const API_ROOT = "https://api.github.com";
+const JSON_ACCEPT = "application/vnd.github+json";
+
+function decodeBase64(content) {
+  const binary = atob(content.replace(/\s/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
 
 export class GitHubRequestError extends Error {
   constructor(message, status = 0) {
@@ -38,8 +46,8 @@ export class GitHubProvider {
   }
 
   async fetchText(path, { signal } = {}) {
-    const response = await this.#request(path, "application/vnd.github.raw+json", signal);
-    return { text: await response.text(), etag: response.headers.get("etag") ?? "" };
+    const { bytes, etag } = await this.#fetchContent(path, signal);
+    return { text: new TextDecoder().decode(bytes), etag };
   }
 
   async fetchJson(path, options = {}) {
@@ -52,11 +60,25 @@ export class GitHubProvider {
   }
 
   async fetchBlob(path, { signal } = {}) {
-    const response = await this.#request(path, "application/vnd.github.raw+json", signal);
-    return response.blob();
+    const { bytes } = await this.#fetchContent(path, signal);
+    return new Blob([bytes]);
   }
 
-  async #request(path, accept, signal) {
+  async #fetchContent(path, signal) {
+    const response = await this.#request(path, signal);
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new GitHubRequestError(`${path}의 GitHub 응답 형식이 올바르지 않습니다.`);
+    }
+    if (payload?.encoding !== "base64" || typeof payload.content !== "string") {
+      throw new GitHubRequestError(`${path}의 파일 내용을 읽을 수 없습니다.`);
+    }
+    return { bytes: decodeBase64(payload.content), etag: response.headers.get("etag") ?? "" };
+  }
+
+  async #request(path, signal) {
     const normalized = normalizeRepositoryPath("", `/${path}`);
     if (!normalized || normalized.path !== String(path).replace(/^\/+/, "")) {
       throw new GitHubRequestError("저장소 경로가 올바르지 않습니다.");
@@ -68,7 +90,7 @@ export class GitHubProvider {
       response = await this.fetchImpl(url, {
         method: "GET",
         headers: {
-          Accept: accept,
+          Accept: JSON_ACCEPT,
           Authorization: `Bearer ${token}`,
         },
         cache: "no-store",
@@ -78,7 +100,12 @@ export class GitHubProvider {
       });
     } catch (error) {
       if (error?.name === "AbortError") throw error;
-      throw new GitHubRequestError("GitHub 네트워크 연결에 실패했습니다.");
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      throw new GitHubRequestError(
+        offline
+          ? "기기가 오프라인 상태입니다. 네트워크 연결을 확인하세요."
+          : "브라우저가 GitHub API 요청을 완료하지 못했습니다. 저장소 권한 오류라면 별도 안내가 표시됩니다.",
+      );
     }
     if (!response.ok) {
       const status = response.status;
