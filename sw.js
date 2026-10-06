@@ -1,11 +1,11 @@
-const CACHE_NAME = "financewiki-viewer-shell-v12";
+const CACHE_NAME = "financewiki-viewer-shell-v13";
 const SHELL_PATHS = [
   "./",
   "./index.html",
   "./viewer.css",
   "./app.mjs",
   "./manifest.webmanifest",
-  "./icon.svg",
+  "./icon.png",
   "./core/credential-store.mjs",
   "./core/document-cache.mjs",
   "./core/document-index.mjs",
