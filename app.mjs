@@ -1,7 +1,7 @@
 import { credentialStore } from "./core/credential-store.mjs";
 import { DocumentCache } from "./core/document-cache.mjs";
 import { DocumentIndex } from "./core/document-index.mjs";
-import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs";
+import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=7";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
 
