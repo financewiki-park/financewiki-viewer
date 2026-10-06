@@ -3,6 +3,10 @@ import { encodeContentPath, normalizeRepositoryPath } from "./path-utils.mjs";
 const API_ROOT = "https://api.github.com";
 const JSON_ACCEPT = "application/vnd.github+json";
 
+function normalizeToken(token) {
+  return String(token ?? "").replace(/[\s\u200B-\u200D\uFEFF]/g, "");
+}
+
 function decodeBase64(content) {
   const binary = atob(content.replace(/\s/g, ""));
   const bytes = new Uint8Array(binary.length);
@@ -26,8 +30,8 @@ function validateConfig(config) {
     if (!/^[A-Za-z0-9_.-]+$/.test(config[key])) throw new Error(`${key} 형식이 올바르지 않습니다.`);
   }
   if (/\s/.test(config.branch)) throw new Error("branch에는 공백을 사용할 수 없습니다.");
-  if (!/^[\x21-\x7e]+$/.test(config.token)) {
-    throw new Error("PAT에는 공백·줄바꿈·특수 숨김 문자를 넣을 수 없습니다.");
+  if (!/^[\x21-\x7e]+$/.test(normalizeToken(config.token))) {
+    throw new Error("PAT 형식이 올바르지 않습니다. GitHub에서 새로 복사해 붙여넣으세요.");
   }
 }
 
@@ -39,7 +43,7 @@ export class GitHubProvider {
       owner: config.owner.trim(),
       repository: config.repository.trim(),
       branch: config.branch.trim(),
-      token: config.token.trim(),
+      token: normalizeToken(config.token),
     });
     this.fetchImpl = fetchImpl === globalThis.fetch ? fetchImpl.bind(globalThis) : fetchImpl;
   }
