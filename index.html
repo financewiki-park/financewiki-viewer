@@ -12,11 +12,11 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./viewer.css">
-    <script type="module" src="./app.mjs?v=10"></script>
+    <script type="module" src="./app.mjs?v=11"></script>
 </head>
 <body>
   <header class="app-header">
-    <button id="homeButton" class="brand" type="button" aria-label="문서 인덱스로 이동">FinanceWiki</button>
+    <button id="homeButton" class="brand" type="button" aria-label="문서 탐색으로 이동">FinanceWiki</button>
     <button id="settingsButton" class="icon-button" type="button" aria-label="GitHub 연결 설정">설정</button>
   </header>
 
@@ -45,13 +45,14 @@
         <span id="documentCount"></span>
         <span id="repositoryStatus" class="muted"></span>
       </div>
-      <ol id="documentList" class="document-list"></ol>
+      <nav id="documentTree" class="document-tree" aria-label="문서 폴더 탐색"></nav>
+      <ol id="documentList" class="document-list" hidden></ol>
       <button id="moreButton" class="secondary-button" type="button" hidden>더 보기</button>
     </section>
 
     <article id="viewerScreen" class="viewer-screen" hidden>
       <nav class="document-nav" aria-label="문서 탐색">
-        <button id="backToListButton" class="secondary-button compact" type="button">목록</button>
+        <button id="backToListButton" class="secondary-button compact" type="button">탐색</button>
         <span id="documentPath" class="document-path"></span>
       </nav>
       <div id="documentLoading" class="loading" hidden>문서를 불러오는 중…</div>

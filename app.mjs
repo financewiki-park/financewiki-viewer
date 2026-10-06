@@ -1,12 +1,11 @@
 import { credentialStore } from "./core/credential-store.mjs";
 import { DocumentCache } from "./core/document-cache.mjs";
-import { DocumentIndex } from "./core/document-index.mjs";
-import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=10";
+import { buildDocumentTree, DocumentIndex } from "./core/document-index.mjs?v=11";
+import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=11";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
 
 const INDEX_PATH = "viewer-index.json";
-const LANDING_DOCUMENT_PATH = "index.md";
 const PAGE_SIZE = 200;
 const elements = Object.fromEntries(
   [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
@@ -84,9 +83,65 @@ function renderList() {
   elements.moreButton.hidden = state.visibleCount >= state.filteredDocuments.length;
 }
 
+function createDocumentButton(item, className) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.dataset.path = item.path;
+  const title = document.createElement("strong");
+  title.textContent = item.title;
+  const detail = document.createElement("small");
+  detail.textContent = item.path;
+  button.append(title, detail);
+  return button;
+}
+
+function renderFolderChildren(container, folder) {
+  const fragment = document.createDocumentFragment();
+  for (const child of folder.folders) fragment.append(createFolderElement(child));
+  for (const item of folder.documents) fragment.append(createDocumentButton(item, "tree-document"));
+  container.append(fragment);
+}
+
+function createFolderElement(folder) {
+  const details = document.createElement("details");
+  details.className = "tree-folder";
+  const summary = document.createElement("summary");
+  summary.className = "tree-folder-summary";
+  summary.textContent = folder.name;
+  const children = document.createElement("div");
+  children.className = "tree-children";
+  let rendered = false;
+  details.addEventListener("toggle", () => {
+    if (!details.open || rendered) return;
+    renderFolderChildren(children, folder);
+    rendered = true;
+  });
+  details.append(summary, children);
+  return details;
+}
+
+function renderTree() {
+  const tree = buildDocumentTree(state.index.documents);
+  const fragment = document.createDocumentFragment();
+  for (const folder of tree.folders) fragment.append(createFolderElement(folder));
+  for (const item of tree.documents) fragment.append(createDocumentButton(item, "tree-document"));
+  elements.documentTree.replaceChildren(fragment);
+}
+
 function applyFilter() {
-  state.filteredDocuments = state.index.filter(elements.searchInput.value);
+  const query = elements.searchInput.value;
+  if (!query.trim()) {
+    elements.documentTree.hidden = false;
+    elements.documentList.hidden = true;
+    elements.moreButton.hidden = true;
+    elements.documentCount.textContent = `${state.index.documents.length}개 문서`;
+    return;
+  }
+  state.filteredDocuments = state.index.filter(query);
   state.visibleCount = PAGE_SIZE;
+  elements.documentTree.hidden = true;
+  elements.documentList.hidden = false;
   renderList();
 }
 
@@ -135,12 +190,8 @@ async function connect(config, persistent, saveCredentials = true) {
   if (saveCredentials) credentialStore.save(config, persistent);
   updateConnectionDetails(!offline);
   elements.repositoryStatus.textContent = offline ? "저장된 인덱스 · 오프라인" : provider.repositoryLabel;
-  renderList();
-  const landing = index.resolve(LANDING_DOCUMENT_PATH);
-  if (!landing) {
-    throw new Error("첫 화면용 문서 인덱스(index.md)를 찾을 수 없습니다.");
-  }
-  await openDocument(landing.document, "", { pushHistory: false });
+  renderTree();
+  showOnly(elements.browserScreen);
   if (offline) showToast("네트워크 오류로 저장된 인덱스를 열었습니다.");
 }
 
@@ -249,12 +300,15 @@ elements.moreButton.addEventListener("click", () => {
   state.visibleCount += PAGE_SIZE;
   renderList();
 });
-elements.documentList.addEventListener("click", (event) => {
+function openSelectedDocument(event) {
   const button = event.target.closest("button[data-path]");
   if (!button) return;
   const resolved = state.index.resolve(button.dataset.path);
   if (resolved) openDocument(resolved.document);
-});
+}
+
+elements.documentList.addEventListener("click", openSelectedDocument);
+elements.documentTree.addEventListener("click", openSelectedDocument);
 elements.documentContent.addEventListener("click", (event) => {
   const anchor = event.target.closest("a[data-wiki-target]");
   if (!anchor) return;
@@ -269,11 +323,7 @@ elements.documentContent.addEventListener("click", (event) => {
 });
 
 elements.backToListButton.addEventListener("click", () => showBrowser({ pushHistory: true }));
-elements.homeButton.addEventListener("click", () => {
-  const landing = state.index?.resolve(LANDING_DOCUMENT_PATH);
-  if (landing) openDocument(landing.document);
-  else showOnly(elements.connectScreen);
-});
+elements.homeButton.addEventListener("click", () => state.index ? showBrowser({ pushHistory: true }) : showOnly(elements.connectScreen));
 elements.retryButton.addEventListener("click", () => state.retry?.());
 elements.settingsButton.addEventListener("click", () => {
   updateConnectionDetails(Boolean(state.provider));

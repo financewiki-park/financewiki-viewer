@@ -91,6 +91,17 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in sr
 .document-card { width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 14px; padding: 13px 14px; min-height: 60px; }
 .document-card strong { display: block; line-height: 1.35; }
 .document-card small { display: block; margin-top: 5px; color: var(--muted); overflow-wrap: anywhere; }
+.document-tree { display: grid; gap: 8px; }
+.tree-folder { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.tree-folder-summary { display: flex; align-items: center; min-height: 52px; padding: 12px 14px; cursor: pointer; font-weight: 700; list-style: none; }
+.tree-folder-summary::-webkit-details-marker { display: none; }
+.tree-folder-summary::before { flex: 0 0 18px; color: var(--muted); content: "▸"; }
+.tree-folder[open] > .tree-folder-summary::before { content: "▾"; }
+.tree-children { display: grid; gap: 6px; padding: 0 8px 8px 24px; }
+.tree-document { width: 100%; min-width: 0; border: 0; border-radius: 10px; padding: 10px 12px; background: transparent; color: var(--text); text-align: left; }
+.tree-document:active { background: var(--code); }
+.tree-document strong { display: block; line-height: 1.35; }
+.tree-document small { display: block; margin-top: 3px; color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
 #moreButton { width: 100%; margin-top: 14px; }
 
 .browser-screen, .viewer-screen, .connect-panel, .document-nav, .markdown-body { min-width: 0; }

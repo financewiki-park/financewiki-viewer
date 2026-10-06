@@ -8,6 +8,42 @@ function addLookup(map, key, document) {
   map.set(normalized, bucket);
 }
 
+function compareItems(left, right) {
+  return left.localeCompare(right, "ko");
+}
+
+function sortTree(node) {
+  node.folders.sort((left, right) => compareItems(left.name, right.name));
+  node.documents.sort((left, right) => compareItems(left.title, right.title) || compareItems(left.path, right.path));
+  for (const folder of node.folders) sortTree(folder);
+  return node;
+}
+
+export function buildDocumentTree(documents) {
+  const root = { name: "", path: "", folders: [], documents: [] };
+  const folders = new Map([["", root]]);
+
+  for (const document of documents) {
+    const parts = document.path.split("/");
+    const fileName = parts.pop();
+    if (!fileName) continue;
+    let parent = root;
+    let folderPath = "";
+    for (const part of parts) {
+      folderPath = folderPath ? `${folderPath}/${part}` : part;
+      let folder = folders.get(folderPath);
+      if (!folder) {
+        folder = { name: part, path: folderPath, folders: [], documents: [] };
+        folders.set(folderPath, folder);
+        parent.folders.push(folder);
+      }
+      parent = folder;
+    }
+    parent.documents.push(document);
+  }
+  return sortTree(root);
+}
+
 export class DocumentIndex {
   constructor(payload) {
     if (!payload || payload.version !== 1 || !Array.isArray(payload.documents)) {
