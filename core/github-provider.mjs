@@ -26,6 +26,9 @@ function validateConfig(config) {
     if (!/^[A-Za-z0-9_.-]+$/.test(config[key])) throw new Error(`${key} 형식이 올바르지 않습니다.`);
   }
   if (/\s/.test(config.branch)) throw new Error("branch에는 공백을 사용할 수 없습니다.");
+  if (!/^[\x21-\x7e]+$/.test(config.token)) {
+    throw new Error("PAT에는 공백·줄바꿈·특수 숨김 문자를 넣을 수 없습니다.");
+  }
 }
 
 export class GitHubProvider {
@@ -100,12 +103,22 @@ export class GitHubProvider {
       });
     } catch (error) {
       if (error?.name === "AbortError") throw error;
-      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
-      throw new GitHubRequestError(
-        offline
-          ? "기기가 오프라인 상태입니다. 네트워크 연결을 확인하세요."
-          : "브라우저가 GitHub API 요청을 완료하지 못했습니다. 저장소 권한 오류라면 별도 안내가 표시됩니다.",
-      );
+      try {
+        response = await this.fetchImpl(url, {
+          method: "GET",
+          headers: { Authorization: `token ${token}` },
+          credentials: "omit",
+          signal,
+        });
+      } catch (fallbackError) {
+        if (fallbackError?.name === "AbortError") throw fallbackError;
+        const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+        throw new GitHubRequestError(
+          offline
+            ? "기기가 오프라인 상태입니다. 네트워크 연결을 확인하세요."
+            : "브라우저가 GitHub API 인증 요청을 차단했습니다. 저장소 권한 오류라면 별도 안내가 표시됩니다.",
+        );
+      }
     }
     if (!response.ok) {
       const status = response.status;
