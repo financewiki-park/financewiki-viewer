@@ -32,16 +32,20 @@
 }
 
 * { box-sizing: border-box; }
-html { min-height: 100%; background: var(--bg); }
-body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
+html { min-height: 100%; max-width: 100%; overflow-x: clip; background: var(--bg); }
+body { min-height: 100%; width: 100%; max-width: 100%; margin: 0; overflow-x: clip; background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
 button, input { font: inherit; }
 button { touch-action: manipulation; }
+img, svg, video, canvas { max-inline-size: 100%; block-size: auto; }
 
 .app-header {
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   min-height: calc(58px + env(safe-area-inset-top));
@@ -51,10 +55,10 @@ button { touch-action: manipulation; }
   backdrop-filter: blur(16px);
 }
 
-.brand, .icon-button { border: 0; background: transparent; color: var(--text); min-height: 44px; padding: 8px; }
-.brand { font-weight: 750; font-size: 1.15rem; letter-spacing: -.02em; padding-left: 0; }
-.icon-button { color: var(--accent); }
-main { width: min(100%, 800px); margin: 0 auto; padding: 20px max(16px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.brand, .icon-button { min-width: 0; border: 0; background: transparent; color: var(--text); min-height: 44px; padding: 8px; }
+.brand { overflow: hidden; font-weight: 750; font-size: 1.15rem; letter-spacing: -.02em; padding-left: 0; text-overflow: ellipsis; white-space: nowrap; }
+.icon-button { flex: 0 0 auto; color: var(--accent); }
+main { width: 100%; max-width: 800px; min-width: 0; margin: 0 auto; padding: 20px max(16px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 
 .panel, dialog { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
 .connect-panel { padding: 24px 20px; margin-top: 5vh; }
@@ -89,6 +93,7 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in sr
 .document-card small { display: block; margin-top: 5px; color: var(--muted); overflow-wrap: anywhere; }
 #moreButton { width: 100%; margin-top: 14px; }
 
+.browser-screen, .viewer-screen, .connect-panel, .document-nav, .markdown-body { min-width: 0; }
 .document-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .document-path { min-width: 0; color: var(--muted); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loading { padding: 30px 0; color: var(--muted); text-align: center; }
@@ -102,13 +107,13 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in sr
 .markdown-body li { margin: .3em 0; }
 .markdown-body a { color: var(--accent); text-decoration-thickness: .08em; text-underline-offset: .16em; padding: 3px 0; }
 .markdown-body code { padding: .14em .32em; border-radius: 5px; background: var(--code); font: .86em ui-monospace, SFMono-Regular, Menlo, monospace; }
-.markdown-body pre { overflow-x: auto; padding: 14px; border-radius: 12px; background: var(--code); -webkit-overflow-scrolling: touch; }
+.markdown-body pre { max-width: 100%; overflow-x: auto; padding: 14px; border-radius: 12px; background: var(--code); -webkit-overflow-scrolling: touch; }
 .markdown-body pre code { padding: 0; background: transparent; font-size: .82rem; }
 .markdown-body blockquote { margin-left: 0; padding: 10px 14px; border-left: 4px solid var(--accent); background: var(--quote); }
 .markdown-body img { display: block; max-width: 100%; height: auto; margin: 1rem auto; border-radius: 8px; }
 .markdown-body hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
-.table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.table-scroll { inline-size: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .88rem; }
 th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
 th { background: var(--code); }
 

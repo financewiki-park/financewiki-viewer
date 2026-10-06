@@ -1,11 +1,12 @@
 import { credentialStore } from "./core/credential-store.mjs";
 import { DocumentCache } from "./core/document-cache.mjs";
 import { DocumentIndex } from "./core/document-index.mjs";
-import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=9";
+import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=10";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
 
 const INDEX_PATH = "viewer-index.json";
+const LANDING_DOCUMENT_PATH = "index.md";
 const PAGE_SIZE = 200;
 const elements = Object.fromEntries(
   [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
@@ -135,7 +136,11 @@ async function connect(config, persistent, saveCredentials = true) {
   updateConnectionDetails(!offline);
   elements.repositoryStatus.textContent = offline ? "저장된 인덱스 · 오프라인" : provider.repositoryLabel;
   renderList();
-  showOnly(elements.browserScreen);
+  const landing = index.resolve(LANDING_DOCUMENT_PATH);
+  if (!landing) {
+    throw new Error("첫 화면용 문서 인덱스(index.md)를 찾을 수 없습니다.");
+  }
+  await openDocument(landing.document, "", { pushHistory: false });
   if (offline) showToast("네트워크 오류로 저장된 인덱스를 열었습니다.");
 }
 
@@ -264,7 +269,11 @@ elements.documentContent.addEventListener("click", (event) => {
 });
 
 elements.backToListButton.addEventListener("click", () => showBrowser({ pushHistory: true }));
-elements.homeButton.addEventListener("click", () => state.index ? showBrowser({ pushHistory: true }) : showOnly(elements.connectScreen));
+elements.homeButton.addEventListener("click", () => {
+  const landing = state.index?.resolve(LANDING_DOCUMENT_PATH);
+  if (landing) openDocument(landing.document);
+  else showOnly(elements.connectScreen);
+});
 elements.retryButton.addEventListener("click", () => state.retry?.());
 elements.settingsButton.addEventListener("click", () => {
   updateConnectionDetails(Boolean(state.provider));
