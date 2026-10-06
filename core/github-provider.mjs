@@ -96,7 +96,6 @@ export class GitHubProvider {
           Accept: JSON_ACCEPT,
           Authorization: `Bearer ${token}`,
         },
-        cache: "no-store",
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal,
