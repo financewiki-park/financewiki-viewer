@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./viewer.css">
-    <script type="module" src="./app.mjs?v=11"></script>
+    <script type="module" src="./app.mjs?v=12"></script>
 </head>
 <body>
   <header class="app-header">
@@ -29,9 +29,8 @@
         <label>Owner<input id="ownerInput" name="owner" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
         <label>Repository<input id="repositoryInput" name="repository" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
         <label>Branch<input id="branchInput" name="branch" inputmode="text" autocapitalize="none" spellcheck="false" value="main" required></label>
-        <label>Personal Access Token<input id="tokenInput" name="token" type="password" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-        <label class="check-row"><input id="rememberInput" name="remember" type="checkbox" checked><span>이 기기에 저장</span></label>
-        <p class="security-note">Fine-grained token · 이 저장소만 · Contents: Read-only</p>
+        <label>Personal Access Token<input id="tokenInput" name="token" type="text" inputmode="text" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+        <p class="security-note">이 기기에 계속 저장 · Fine-grained token · 이 저장소만 · Contents: Read-only</p>
         <button id="connectButton" class="primary-button" type="button">연결 테스트 및 열기</button>
       </form>
     </section>

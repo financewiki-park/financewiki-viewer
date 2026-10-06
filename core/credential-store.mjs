@@ -11,13 +11,19 @@ function safeParse(value) {
 
 export const credentialStore = {
   load() {
-    return safeParse(sessionStorage.getItem(STORAGE_KEY)) ?? safeParse(localStorage.getItem(STORAGE_KEY));
+    const persistent = safeParse(localStorage.getItem(STORAGE_KEY));
+    if (persistent) return persistent;
+    const legacySession = safeParse(sessionStorage.getItem(STORAGE_KEY));
+    if (legacySession) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(legacySession));
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
+    return legacySession;
   },
-  save(config, persistent) {
+  save(config) {
     const serialized = JSON.stringify(config);
     sessionStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(STORAGE_KEY);
-    (persistent ? localStorage : sessionStorage).setItem(STORAGE_KEY, serialized);
+    localStorage.setItem(STORAGE_KEY, serialized);
   },
   clear() {
     sessionStorage.removeItem(STORAGE_KEY);

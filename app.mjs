@@ -1,4 +1,4 @@
-import { credentialStore } from "./core/credential-store.mjs";
+import { credentialStore } from "./core/credential-store.mjs?v=12";
 import { DocumentCache } from "./core/document-cache.mjs";
 import { buildDocumentTree, DocumentIndex } from "./core/document-index.mjs?v=11";
 import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=11";
@@ -149,8 +149,8 @@ function fillConnectionForm(config) {
   elements.ownerInput.value = config?.owner ?? "financewiki-park";
   elements.repositoryInput.value = config?.repository ?? "financewiki-private";
   elements.branchInput.value = config?.branch ?? "main";
-  elements.tokenInput.value = "";
-  elements.tokenInput.placeholder = config?.token ? "저장된 토큰 사용 중" : "github_pat_…";
+  elements.tokenInput.value = config?.token ?? "";
+  elements.tokenInput.placeholder = "github_pat_…";
 }
 
 function updateConnectionDetails(connected) {
@@ -159,7 +159,7 @@ function updateConnectionDetails(connected) {
   elements.connectionBranch.textContent = state.config?.branch ?? "-";
 }
 
-async function connect(config, persistent, saveCredentials = true) {
+async function connect(config, saveCredentials = true) {
   hideError();
   elements.connectButton.disabled = true;
   elements.connectButton.textContent = "연결 확인 중…";
@@ -187,7 +187,7 @@ async function connect(config, persistent, saveCredentials = true) {
   state.index = index;
   state.filteredDocuments = index.documents;
   state.visibleCount = PAGE_SIZE;
-  if (saveCredentials) credentialStore.save(config, persistent);
+  if (saveCredentials) credentialStore.save(config);
   updateConnectionDetails(!offline);
   elements.repositoryStatus.textContent = offline ? "저장된 인덱스 · 오프라인" : provider.repositoryLabel;
   renderTree();
@@ -286,10 +286,10 @@ elements.connectForm.addEventListener("submit", async (event) => {
     owner: elements.ownerInput.value.trim(),
     repository: elements.repositoryInput.value.trim(),
     branch: elements.branchInput.value.trim(),
-    token: elements.tokenInput.value.trim() || stored?.token || "",
+    token: elements.tokenInput.value || stored?.token || "",
   };
   try {
-    await connect(config, elements.rememberInput.checked, true);
+    await connect(config, true);
   } catch (error) {
     showError("FinanceWiki에 연결할 수 없습니다.", error?.message || "GitHub 인증정보를 확인하세요.");
   }
@@ -362,7 +362,7 @@ async function start() {
   fillConnectionForm(saved);
   if (saved) {
     try {
-      await connect(saved, Boolean(localStorage.getItem("financewiki.viewer.credentials.v1")), false);
+      await connect(saved, false);
     } catch (error) {
       showOnly(elements.connectScreen);
       showError("FinanceWiki에 연결할 수 없습니다.", error?.message || "저장된 GitHub 인증정보를 다시 설정하세요.");
