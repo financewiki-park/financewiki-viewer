@@ -9,7 +9,7 @@
   "theme_color": "#0b6bcb",
   "icons": [
     {
-      "src": "./icon.png?v=13",
+      "src": "./financewiki-app-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
