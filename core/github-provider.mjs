@@ -41,7 +41,7 @@ export class GitHubProvider {
       branch: config.branch.trim(),
       token: config.token.trim(),
     });
-    this.fetchImpl = fetchImpl;
+    this.fetchImpl = fetchImpl === globalThis.fetch ? fetchImpl.bind(globalThis) : fetchImpl;
   }
 
   get repositoryLabel() {
