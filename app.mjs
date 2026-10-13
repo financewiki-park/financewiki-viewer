@@ -1,6 +1,6 @@
 import { credentialStore } from "./core/credential-store.mjs?v=12";
 import { DocumentCache } from "./core/document-cache.mjs";
-import { buildDocumentTree, DocumentIndex } from "./core/document-index.mjs?v=11";
+import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/document-index.mjs?v=12";
 import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=11";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
@@ -98,8 +98,9 @@ function createDocumentButton(item, className) {
 
 function renderFolderChildren(container, folder) {
   const fragment = document.createDocumentFragment();
+  for (const item of folder.documents.filter(isIndexDocument)) fragment.append(createDocumentButton(item, "tree-document"));
   for (const child of folder.folders) fragment.append(createFolderElement(child));
-  for (const item of folder.documents) fragment.append(createDocumentButton(item, "tree-document"));
+  for (const item of folder.documents.filter((item) => !isIndexDocument(item))) fragment.append(createDocumentButton(item, "tree-document"));
   container.append(fragment);
 }
 
@@ -124,8 +125,9 @@ function createFolderElement(folder) {
 function renderTree() {
   const tree = buildDocumentTree(state.index.documents);
   const fragment = document.createDocumentFragment();
+  for (const item of tree.documents.filter(isIndexDocument)) fragment.append(createDocumentButton(item, "tree-document"));
   for (const folder of tree.folders) fragment.append(createFolderElement(folder));
-  for (const item of tree.documents) fragment.append(createDocumentButton(item, "tree-document"));
+  for (const item of tree.documents.filter((item) => !isIndexDocument(item))) fragment.append(createDocumentButton(item, "tree-document"));
   elements.documentTree.replaceChildren(fragment);
 }
 

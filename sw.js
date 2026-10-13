@@ -1,4 +1,4 @@
-const CACHE_NAME = "financewiki-viewer-shell-v14";
+const CACHE_NAME = "financewiki-viewer-shell-v15";
 const SHELL_PATHS = [
   "./",
   "./index.html",

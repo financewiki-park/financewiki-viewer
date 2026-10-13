@@ -12,9 +12,18 @@ function compareItems(left, right) {
   return left.localeCompare(right, "ko");
 }
 
+export function isIndexDocument(document) {
+  const normalized = String(document?.path || "").replaceAll("\\", "/").normalize("NFC");
+  const filename = normalized.slice(normalized.lastIndexOf("/") + 1).toLocaleLowerCase("ko");
+  return filename === "index.md" || filename === "_index.md" || /인덱스\.md$/u.test(filename);
+}
+
 function sortTree(node) {
   node.folders.sort((left, right) => compareItems(left.name, right.name));
-  node.documents.sort((left, right) => compareItems(left.title, right.title) || compareItems(left.path, right.path));
+  node.documents.sort((left, right) =>
+    Number(isIndexDocument(right)) - Number(isIndexDocument(left))
+    || compareItems(left.title, right.title)
+    || compareItems(left.path, right.path));
   for (const folder of node.folders) sortTree(folder);
   return node;
 }
