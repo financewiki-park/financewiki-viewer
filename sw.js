@@ -1,4 +1,6 @@
-const CACHE_NAME = "financewiki-viewer-shell-v15";
+// 배포 워크플로가 __VIEWER_BUILD__를 커밋 SHA로 바꾼다. 배포마다 캐시가 한 벌로 교체된다.
+const BUILD_ID = "__VIEWER_BUILD__";
+const CACHE_NAME = `financewiki-viewer-shell-${BUILD_ID}`;
 const SHELL_PATHS = [
   "./",
   "./index.html",
@@ -15,8 +17,18 @@ const SHELL_PATHS = [
 ];
 const SHELL_URLS = new Set(SHELL_PATHS.map((path) => new URL(path, self.registration.scope).href));
 
+function shellKey(requestUrl) {
+  const url = new URL(requestUrl);
+  url.search = "";
+  url.hash = "";
+  return url.href;
+}
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_PATHS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(SHELL_PATHS.map((path) => new Request(path, { cache: "reload" })))),
+  );
   self.skipWaiting();
 });
 
@@ -29,17 +41,14 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (
-    event.request.method !== "GET"
-    || url.origin !== self.location.origin
-    || !SHELL_URLS.has(url.href)
-  ) return;
+  if (event.request.method !== "GET") return;
+  const key = shellKey(event.request.url);
+  if (new URL(key).origin !== self.location.origin || !SHELL_URLS.has(key)) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => cached ?? fetch(event.request).then((response) => {
+    caches.match(key).then((cached) => cached ?? fetch(event.request).then((response) => {
       if (response.ok) {
         const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        caches.open(CACHE_NAME).then((cache) => cache.put(key, copy));
       }
       return response;
     })),

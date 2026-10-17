@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Stamp service worker cache version
+        run: sed -i "/^const BUILD_ID/s/__VIEWER_BUILD__/${GITHUB_SHA::12}/" sw.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .

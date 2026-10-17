@@ -1,7 +1,7 @@
-import { credentialStore } from "./core/credential-store.mjs?v=12";
+import { credentialStore } from "./core/credential-store.mjs";
 import { DocumentCache } from "./core/document-cache.mjs";
-import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/document-index.mjs?v=12";
-import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs?v=11";
+import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/document-index.mjs";
+import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
 
@@ -22,6 +22,8 @@ const state = {
   visibleCount: PAGE_SIZE,
   objectUrls: [],
   retry: null,
+  openSequence: 0,
+  openController: null,
 };
 
 function repositoryKey(config = state.config) {
@@ -163,9 +165,10 @@ function updateConnectionDetails(connected) {
 
 async function connect(config, saveCredentials = true) {
   hideError();
+  // 입력값 검사 오류는 버튼을 잠그기 전에 던져야 다시 시도할 수 있다.
+  const provider = new GitHubProvider(config);
   elements.connectButton.disabled = true;
   elements.connectButton.textContent = "연결 확인 중…";
-  const provider = new GitHubProvider(config);
   const key = repositoryKey(config);
   let payload;
   let offline = false;
@@ -193,8 +196,18 @@ async function connect(config, saveCredentials = true) {
   updateConnectionDetails(!offline);
   elements.repositoryStatus.textContent = offline ? "저장된 인덱스 · 오프라인" : provider.repositoryLabel;
   renderTree();
+  applyFilter();
   showOnly(elements.browserScreen);
   if (offline) showToast("네트워크 오류로 저장된 인덱스를 열었습니다.");
+}
+
+// 늦게 도착한 이전 문서 응답이 화면을 덮어쓰지 않도록 문서 열기마다 순번을 올린다.
+function beginNavigation() {
+  state.openController?.abort();
+  state.openController = new AbortController();
+  state.openSequence += 1;
+  const sequence = state.openSequence;
+  return { signal: state.openController.signal, isCurrent: () => sequence === state.openSequence };
 }
 
 function revokeObjectUrls() {
@@ -202,7 +215,7 @@ function revokeObjectUrls() {
   state.objectUrls = [];
 }
 
-async function loadPrivateImages(container, documentItem) {
+async function loadPrivateImages(container, documentItem, navigation) {
   const images = [...container.querySelectorAll("img[data-wiki-image]")];
   await Promise.all(images.map(async (image) => {
     const target = image.dataset.wikiImage;
@@ -213,7 +226,8 @@ async function loadPrivateImages(container, documentItem) {
       return;
     }
     try {
-      const blob = await state.provider.fetchBlob(resolved.path);
+      const blob = await state.provider.fetchBlob(resolved.path, { signal: navigation.signal });
+      if (!navigation.isCurrent()) return;
       const url = URL.createObjectURL(blob);
       state.objectUrls.push(url);
       image.src = url;
@@ -235,6 +249,7 @@ function scrollToFragment(fragment) {
 }
 
 async function openDocument(documentItem, fragment = "", { pushHistory = true } = {}) {
+  const navigation = beginNavigation();
   hideError();
   showOnly(elements.viewerScreen);
   elements.documentLoading.hidden = false;
@@ -246,12 +261,11 @@ async function openDocument(documentItem, fragment = "", { pushHistory = true } 
   try {
     const key = repositoryKey();
     let markdown = await state.cache.get(key, documentItem);
-    let cacheHit = true;
     if (markdown === null) {
-      cacheHit = false;
-      ({ text: markdown } = await state.provider.fetchText(documentItem.path));
+      ({ text: markdown } = await state.provider.fetchText(documentItem.path, { signal: navigation.signal }));
       await state.cache.put(key, documentItem, markdown);
     }
+    if (!navigation.isCurrent()) return;
     const rendered = sanitizeRenderedHtml(renderMarkdown(markdown));
     elements.documentContent.innerHTML = rendered;
     elements.documentContent.hidden = false;
@@ -260,10 +274,10 @@ async function openDocument(documentItem, fragment = "", { pushHistory = true } 
     if (pushHistory) {
       history.pushState({ financewikiPath: documentItem.path, fragment }, "", location.pathname);
     }
-    await loadPrivateImages(elements.documentContent, documentItem);
-    scrollToFragment(fragment);
-    if (cacheHit) showToast("저장된 문서를 열었습니다.");
+    await loadPrivateImages(elements.documentContent, documentItem, navigation);
+    if (navigation.isCurrent()) scrollToFragment(fragment);
   } catch (error) {
+    if (!navigation.isCurrent()) return;
     elements.documentLoading.hidden = true;
     showError(
       "문서를 불러오지 못했습니다.",
@@ -274,6 +288,7 @@ async function openDocument(documentItem, fragment = "", { pushHistory = true } 
 }
 
 function showBrowser({ pushHistory = false } = {}) {
+  beginNavigation();
   revokeObjectUrls();
   state.currentDocument = null;
   document.title = "FinanceWiki";
@@ -296,8 +311,9 @@ elements.connectForm.addEventListener("submit", async (event) => {
     showError("FinanceWiki에 연결할 수 없습니다.", error?.message || "GitHub 인증정보를 확인하세요.");
   }
 });
+elements.connectButton.addEventListener("click", () => elements.connectForm.requestSubmit());
 
-elements.connectButton.addEventListener("click", () => elements.connectForm.requestSubmit()); elements.searchInput.addEventListener("input", applyFilter);
+elements.searchInput.addEventListener("input", applyFilter);
 elements.moreButton.addEventListener("click", () => {
   state.visibleCount += PAGE_SIZE;
   renderList();
@@ -332,6 +348,7 @@ elements.settingsButton.addEventListener("click", () => {
   elements.settingsDialog.showModal();
 });
 elements.reconfigureButton.addEventListener("click", () => {
+  beginNavigation();
   elements.settingsDialog.close();
   fillConnectionForm(state.config ?? credentialStore.load());
   showOnly(elements.connectScreen);
@@ -342,6 +359,7 @@ elements.deleteCredentialsButton.addEventListener("click", async () => {
   state.provider = null;
   state.config = null;
   state.index = null;
+  beginNavigation();
   elements.settingsDialog.close();
   fillConnectionForm(null);
   showOnly(elements.connectScreen);

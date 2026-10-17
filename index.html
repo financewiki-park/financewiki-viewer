@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b6bcb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#101820" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fffdf8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#122133" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com; img-src 'self' data: blob: https:; style-src 'self'; script-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; frame-src 'none'">
@@ -13,7 +13,7 @@
   <link rel="icon" href="./financewiki-app-icon.png" type="image/png">
   <link rel="apple-touch-icon" sizes="512x512" href="./financewiki-app-icon.png">
   <link rel="stylesheet" href="./viewer.css">
-    <script type="module" src="./app.mjs?v=15"></script>
+  <script type="module" src="./app.mjs"></script>
 </head>
 <body>
   <header class="app-header">
@@ -27,9 +27,9 @@
       <h1 id="connectTitle">GitHub 연결</h1>
       <p class="muted">저장소 전체가 아니라 경량 인덱스와 선택한 문서만 가져옵니다.</p>
       <form id="connectForm" autocomplete="off">
-        <label>Owner<input id="ownerInput" name="owner" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
-        <label>Repository<input id="repositoryInput" name="repository" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
-        <label>Branch<input id="branchInput" name="branch" inputmode="text" autocapitalize="none" spellcheck="false" value="main" required></label>
+        <label>Owner<input id="ownerInput" type="text" name="owner" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
+        <label>Repository<input id="repositoryInput" type="text" name="repository" inputmode="text" autocapitalize="none" spellcheck="false" required></label>
+        <label>Branch<input id="branchInput" type="text" name="branch" inputmode="text" autocapitalize="none" spellcheck="false" value="main" required></label>
         <label>Personal Access Token<input id="tokenInput" name="token" type="text" inputmode="text" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
         <p class="security-note">이 기기에 계속 저장 · Fine-grained token · 이 저장소만 · Contents: Read-only</p>
         <button id="connectButton" class="primary-button" type="button">연결 테스트 및 열기</button>
@@ -76,7 +76,7 @@
       </dl>
       <button id="reconfigureButton" value="cancel" class="secondary-button" type="button">토큰·저장소 변경</button>
       <button id="deleteCredentialsButton" value="cancel" class="danger-button" type="button">저장된 인증정보와 문서 캐시 삭제</button>
-      <p class="security-note">토큰 원문은 설정 화면에 다시 표시하지 않습니다.</p>
+      <p class="security-note">저장된 토큰은 ‘토큰·저장소 변경’ 화면에서 확인·수정할 수 있습니다.</p>
     </form>
   </dialog>
 

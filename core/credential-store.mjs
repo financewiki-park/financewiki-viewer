@@ -31,7 +31,14 @@ export const credentialStore = {
     localStorage.removeItem(INDEX_KEY);
   },
   saveIndex(repositoryKey, payload) {
-    localStorage.setItem(INDEX_KEY, JSON.stringify({ repositoryKey, payload }));
+    // 오프라인용 보조 사본이므로 저장 공간 부족 등으로 실패해도 연결을 막지 않는다.
+    try {
+      localStorage.setItem(INDEX_KEY, JSON.stringify({ repositoryKey, payload }));
+      return true;
+    } catch {
+      localStorage.removeItem(INDEX_KEY);
+      return false;
+    }
   },
   loadIndex(repositoryKey) {
     const cached = safeParse(localStorage.getItem(INDEX_KEY));

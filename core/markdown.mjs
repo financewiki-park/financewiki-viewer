@@ -71,7 +71,22 @@ export function renderInline(source) {
 
 function isTableDivider(line) {
   const cells = line.trim().replace(/^\||\|$/g, "").split("|");
-  return cells.length > 0 && cells.every((cell) => /^\s*:?-{3,}:?\s*$/.test(cell));
+  return cells.length > 0 && cells.every((cell) => /^\s*:?-+:?\s*$/.test(cell));
+}
+
+function tableAlignments(line) {
+  return tableCells(line).map((cell) => {
+    const left = cell.startsWith(":");
+    const right = cell.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    if (left) return "left";
+    return "";
+  });
+}
+
+function alignClass(alignment) {
+  return alignment ? ` class="align-${alignment}"` : "";
 }
 
 function tableCells(line) {
@@ -84,7 +99,102 @@ function stripFrontmatter(lines) {
   return closing >= 0 ? lines.slice(closing + 2) : lines;
 }
 
+const LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d{1,9})[.)])[ \t]+(.+)$/;
+const NESTED_INDENT = 2;
+
+function indentWidth(whitespace) {
+  let width = 0;
+  for (const character of whitespace) width = character === "\t" ? width + 4 - (width % 4) : width + 1;
+  return width;
+}
+
+function parseListItem(line) {
+  const match = line.match(LIST_ITEM);
+  if (!match) return null;
+  return { indent: indentWidth(match[1]), ordered: Boolean(match[3]), number: match[3] ? Number(match[3]) : null, text: match[4] };
+}
+
+function isListContinuation(line, nextLine) {
+  if (!/^[ \t]+\S/.test(line) || parseListItem(line)) return false;
+  if (/^\s*```/.test(line) || /^\s*>/.test(line) || /^\s*#{1,6}\s/.test(line)) return false;
+  return !(line.includes("|") && nextLine !== undefined && isTableDivider(nextLine));
+}
+
+function renderListItem(item) {
+  const task = item.lines[0].match(/^\[([ xX])\][ \t]+(.*)$/);
+  const text = task ? [task[2], ...item.lines.slice(1)] : item.lines;
+  const body = renderInline(text.join("\n")).replaceAll("\n", "<br>");
+  const children = item.children.map(renderList).join("");
+  if (!task) return `<li>${body}${children}</li>`;
+  const done = task[1] !== " ";
+  return `<li class="task-list-item${done ? " task-done" : ""}">${done ? "☑" : "☐"} ${body}${children}</li>`;
+}
+
+function renderList(list) {
+  const tag = list.ordered ? "ol" : "ul";
+  const start = list.ordered && list.start !== 1 ? ` start="${list.start}"` : "";
+  const items = list.items.map(renderListItem).join("");
+  return `<${tag}${start}>${items}</${tag}>`;
+}
+
+// 들여쓰기 깊이로 중첩 목록 트리를 만든다. 반환값은 최상위 목록 배열과 다음 처리 줄.
+function parseList(lines, index) {
+  const roots = [];
+  const stack = [];
+  let lastItem = null;
+  const openList = (item, parentItem) => {
+    const list = { indent: item.indent, ordered: item.ordered, start: item.number ?? 1, items: [] };
+    (parentItem ? parentItem.children : roots).push(list);
+    stack.push(list);
+    return list;
+  };
+  while (index < lines.length) {
+    const line = lines[index];
+    const item = parseListItem(line);
+    if (item) {
+      while (stack.length > 1 && stack.at(-1).indent > item.indent) stack.pop();
+      let list = stack.at(-1);
+      if (!list) {
+        list = openList(item, null);
+      } else if (item.indent >= list.indent + NESTED_INDENT && lastItem) {
+        list = openList(item, lastItem);
+      } else if (list.ordered !== item.ordered) {
+        stack.pop();
+        list = openList(item, stack.length ? stack.at(-1).items.at(-1) : null);
+      }
+      lastItem = { lines: [item.text], children: [] };
+      list.items.push(lastItem);
+      index += 1;
+      continue;
+    }
+    if (line.trim()) {
+      if (!lastItem || !isListContinuation(line, lines[index + 1])) break;
+      lastItem.lines.push(line.trim());
+      index += 1;
+      continue;
+    }
+    let next = index;
+    while (next < lines.length && !lines[next].trim()) next += 1;
+    if (next >= lines.length || !parseListItem(lines[next])) break;
+    index = next;
+  }
+  return { html: roots.map(renderList).join(""), index };
+}
+
+function uniqueHeadingId(text, usedIds) {
+  const base = slugifyHeading(text);
+  if (!base) return "";
+  let id = base;
+  for (let suffix = 1; usedIds.has(id); suffix += 1) id = `${base}-${suffix}`;
+  usedIds.add(id);
+  return id;
+}
+
 export function renderMarkdown(markdown) {
+  return renderBlocks(markdown, new Set());
+}
+
+function renderBlocks(markdown, usedIds) {
   const lines = stripFrontmatter(String(markdown ?? "").replace(/\r\n?/g, "\n").split("\n"));
   const output = [];
   let index = 0;
@@ -109,7 +219,7 @@ export function renderMarkdown(markdown) {
     const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
     if (heading) {
       const level = heading[1].length;
-      const id = slugifyHeading(heading[2]);
+      const id = uniqueHeadingId(heading[2], usedIds);
       output.push(`<h${level}${id ? ` id="${escapeHtml(id)}"` : ""}>${renderInline(heading[2])}</h${level}>`);
       index += 1;
       continue;
@@ -123,12 +233,13 @@ export function renderMarkdown(markdown) {
 
     if (line.includes("|") && index + 1 < lines.length && isTableDivider(lines[index + 1])) {
       const headers = tableCells(line);
+      const alignments = tableAlignments(lines[index + 1]);
       index += 2;
       const rows = [];
       while (index < lines.length && lines[index].includes("|") && lines[index].trim()) {
         rows.push(tableCells(lines[index++]));
       }
-      output.push(`<div class="table-scroll"><table><thead><tr>${headers.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((_, cellIndex) => `<td>${renderInline(row[cellIndex] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      output.push(`<div class="table-scroll"><table><thead><tr>${headers.map((cell, cellIndex) => `<th${alignClass(alignments[cellIndex])}>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((_, cellIndex) => `<td${alignClass(alignments[cellIndex])}>${renderInline(row[cellIndex] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
       continue;
     }
 
@@ -137,22 +248,14 @@ export function renderMarkdown(markdown) {
       while (index < lines.length && /^\s*>/.test(lines[index])) {
         quote.push(lines[index++].replace(/^\s*>\s?/, ""));
       }
-      output.push(`<blockquote>${renderMarkdown(quote.join("\n"))}</blockquote>`);
+      output.push(`<blockquote>${renderBlocks(quote.join("\n"), usedIds)}</blockquote>`);
       continue;
     }
 
-    const listMatch = line.match(/^\s*(?:([-+*])|(\d+)\.)\s+(.+)$/);
-    if (listMatch) {
-      const ordered = Boolean(listMatch[2]);
-      const tag = ordered ? "ol" : "ul";
-      const items = [];
-      while (index < lines.length) {
-        const item = lines[index].match(/^\s*(?:([-+*])|(\d+)\.)\s+(.+)$/);
-        if (!item || Boolean(item[2]) !== ordered) break;
-        items.push(`<li>${renderInline(item[3])}</li>`);
-        index += 1;
-      }
-      output.push(`<${tag}>${items.join("")}</${tag}>`);
+    if (parseListItem(line)) {
+      const list = parseList(lines, index);
+      output.push(list.html);
+      index = list.index;
       continue;
     }
 
@@ -160,7 +263,7 @@ export function renderMarkdown(markdown) {
     index += 1;
     while (index < lines.length && lines[index].trim()) {
       const next = lines[index];
-      if (/^(?:#{1,6})\s+/.test(next) || /^\s*```/.test(next) || /^\s*>/.test(next) || /^\s*(?:[-+*]|\d+\.)\s+/.test(next)) break;
+      if (/^(?:#{1,6})\s+/.test(next) || /^\s*```/.test(next) || /^\s*>/.test(next) || parseListItem(next)) break;
       if (next.includes("|") && index + 1 < lines.length && isTableDivider(lines[index + 1])) break;
       paragraph.push(next.trim());
       index += 1;
@@ -174,7 +277,7 @@ const ALLOWED_TAGS = new Set([
   "A", "BLOCKQUOTE", "BR", "CODE", "DEL", "DIV", "EM", "H1", "H2", "H3", "H4", "H5", "H6",
   "HR", "IMG", "LI", "OL", "P", "PRE", "STRONG", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL",
 ]);
-const ALLOWED_ATTRIBUTES = new Set(["alt", "class", "data-wiki-image", "data-wiki-target", "href", "id", "loading", "rel", "src", "target"]);
+const ALLOWED_ATTRIBUTES = new Set(["alt", "class", "data-wiki-image", "data-wiki-target", "href", "id", "loading", "rel", "src", "start", "target"]);
 
 export function sanitizeRenderedHtml(html, documentImpl = globalThis.document) {
   if (!documentImpl?.createElement) return html;
@@ -189,6 +292,9 @@ export function sanitizeRenderedHtml(html, documentImpl = globalThis.document) {
       if (!ALLOWED_ATTRIBUTES.has(attribute.name) || attribute.name.toLowerCase().startsWith("on")) {
         element.removeAttribute(attribute.name);
       }
+    }
+    if (element.hasAttribute("start") && (element.tagName !== "OL" || !/^\d{1,9}$/.test(element.getAttribute("start") ?? ""))) {
+      element.removeAttribute("start");
     }
     if (element.tagName === "A" && element.hasAttribute("href")) {
       const href = element.getAttribute("href") ?? "";
