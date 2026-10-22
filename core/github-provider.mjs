@@ -113,6 +113,7 @@ export class GitHubProvider {
           Accept: RAW_ACCEPT,
           Authorization: `Bearer ${token}`,
         },
+        cache: "no-store",
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal,
@@ -123,6 +124,7 @@ export class GitHubProvider {
         response = await this.fetchImpl(url, {
           method: "GET",
           headers: { Authorization: `token ${token}` },
+          cache: "no-store",
           credentials: "omit",
           signal,
         });
