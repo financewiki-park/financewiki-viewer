@@ -122,7 +122,8 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       if (!source || !target) continue;
       edge.element.setAttribute("x1", source.x); edge.element.setAttribute("y1", source.y); edge.element.setAttribute("x2", target.x); edge.element.setAttribute("y2", target.y);
     }
-    for (const point of sim.points.values()) point.element.setAttribute("transform", `translate(${point.x} ${point.y})`);
+    // 확대는 관계의 거리와 선에만 적용한다. 노드·라벨은 화면에서 읽을 수 있는 크기로 유지한다.
+    for (const point of sim.points.values()) point.element.setAttribute("transform", `translate(${point.x} ${point.y}) scale(${1 / sim.scale})`);
   }
   function setLabels(sim, scale = 1) {
     const showAll = scale >= 1.25 || sim.points.size < 28;
@@ -165,7 +166,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     if (sim.alpha > .035) sim.frame = requestAnimationFrame(() => tick(sim)); else { sim.running = false; sim.frame = 0; }
   }
   function start() { if (!simulation || simulation.running || simulation.alpha <= .035) return; simulation.running = true; simulation.frame = requestAnimationFrame(() => tick(simulation)); }
-  function reheat(scale) { if (!simulation || simulation.alpha === 0) return; simulation.scale = scale; simulation.alpha = Math.max(simulation.alpha, .42); setLabels(simulation, scale); start(); }
+  function reheat(scale) { if (!simulation) return; simulation.scale = scale; setLabels(simulation, scale); repaint(simulation); if (simulation.alpha === 0) return; simulation.alpha = Math.max(simulation.alpha, .42); start(); }
   function attachPanZoom(root, viewport) {
     const pointers = new Map(); let drag = null; let pinch = null;
     const apply = (x, y, scale) => { viewport.dataset.x = String(x); viewport.dataset.y = String(y); viewport.dataset.scale = String(scale); viewport.setAttribute("transform", `translate(${x} ${y}) scale(${scale})`); };
