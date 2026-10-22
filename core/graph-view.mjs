@@ -171,7 +171,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     const apply = (x, y, scale) => { viewport.dataset.x = String(x); viewport.dataset.y = String(y); viewport.dataset.scale = String(scale); viewport.setAttribute("transform", `translate(${x} ${y}) scale(${scale})`); };
     const state = () => ({ x: Number(viewport.dataset.x || 0), y: Number(viewport.dataset.y || 0), scale: Number(viewport.dataset.scale || 1) });
     const toGraphPoint = (clientX, clientY) => { const bounds = root.getBoundingClientRect(); const viewBox = root.viewBox.baseVal; return { x: viewBox.x + (clientX - bounds.left) / bounds.width * viewBox.width, y: viewBox.y + (clientY - bounds.top) / bounds.height * viewBox.height }; };
-    const zoom = (scale, clientX, clientY, base = state()) => { const next = Math.max(1, Math.min(3.2, scale)); if (next === 1) apply(0, 0, 1); else { const point = toGraphPoint(clientX, clientY); const ratio = next / base.scale; apply(point.x - (point.x - base.x) * ratio, point.y - (point.y - base.y) * ratio, next); } reheat(next); };
+    const zoom = (scale, clientX, clientY, base = state()) => { const next = Math.max(1, Math.min(8, scale)); if (next === 1) apply(0, 0, 1); else { const point = toGraphPoint(clientX, clientY); const ratio = next / base.scale; apply(point.x - (point.x - base.x) * ratio, point.y - (point.y - base.y) * ratio, next); } reheat(next); };
     apply(0, 0, 1);
     root.addEventListener("wheel", (event) => { event.preventDefault(); const current = state(); zoom(current.scale * (event.deltaY < 0 ? 1.16 : .86), event.clientX, event.clientY, current); }, { passive: false });
     root.addEventListener("pointerdown", (event) => {
