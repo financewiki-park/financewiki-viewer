@@ -17,6 +17,14 @@ function visualNodeScale(scale) { return Math.min(1.18, 1 + Math.log2(Math.max(1
 // 확대는 요청한 비율 그대로 적용한다. 확대 화면에는 가까운 노드만 보여도 된다.
 function presentationScale(scale) { return scale; }
 
+export function calculateZoomTranslation(base, focus, nextScale) {
+  const ratio = nextScale / base.visualScale;
+  return {
+    x: focus.x - (focus.x - base.x) * ratio,
+    y: focus.y - (focus.y - base.y) * ratio
+  };
+}
+
 function graphDistances(model) {
   const result = new Map();
   if (!model.centerId) return result;
@@ -40,7 +48,7 @@ function graphDistances(model) {
   return result;
 }
 
-function globalLayout(model) {
+function globalLayout(model, viewport) {
   const degrees = new Map();
   for (const edge of model.edges) {
     degrees.set(edge.source, (degrees.get(edge.source) || 0) + 1);
@@ -53,26 +61,27 @@ function globalLayout(model) {
     groups.get(group).push(node);
   }
   const entries = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"));
-  const columns = Math.max(2, Math.ceil(Math.sqrt(entries.length * 1.45)));
-  const cellWidth = 290; const cellHeight = 210;
-  const width = Math.max(1200, columns * cellWidth + 80); const height = Math.max(760, Math.ceil(entries.length / columns) * cellHeight + 90);
+  const width = viewport.width; const height = viewport.height;
+  const columns = Math.max(1, Math.min(entries.length || 1, Math.ceil(Math.sqrt(entries.length * width / height))));
+  const rows = Math.max(1, Math.ceil(entries.length / columns));
+  const cellWidth = width / columns; const cellHeight = height / rows;
   const positions = new Map(); const clusters = [];
   entries.forEach(([name, nodes], index) => {
-    const x = 55 + (index % columns) * cellWidth + cellWidth / 2;
-    const y = 45 + Math.floor(index / columns) * cellHeight + cellHeight / 2;
+    const x = (index % columns) * cellWidth + cellWidth / 2;
+    const y = Math.floor(index / columns) * cellHeight + cellHeight / 2;
     const ordered = [...nodes].sort((a, b) => (degrees.get(b.id) || 0) - (degrees.get(a.id) || 0) || label(a).localeCompare(label(b), "ko"));
     ordered.forEach((node, nodeIndex) => {
       const angle = nodeIndex * 2.399963229728653;
-      const radius = 16 + Math.sqrt(nodeIndex) * 14;
+      const radius = 10 + Math.sqrt(nodeIndex) * Math.min(12, Math.min(cellWidth, cellHeight) / 12);
       positions.set(node.id, { x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius * .72 });
     });
-    clusters.push({ name, x, y, radius: Math.max(55, 26 + Math.sqrt(nodes.length) * 16), color: color(nodes[0]) });
+    clusters.push({ name, x, y, radius: Math.min(Math.min(cellWidth, cellHeight) * .44, Math.max(34, 22 + Math.sqrt(nodes.length) * 11)), color: color(nodes[0]) });
   });
   return { width, height, positions, clusters, degrees };
 }
 
-function localLayout(model) {
-  const width = 1200; const height = 760; const centerX = width / 2; const centerY = height / 2;
+function localLayout(model, viewport) {
+  const width = viewport.width; const height = viewport.height; const centerX = width / 2; const centerY = height / 2;
   const positions = new Map(); const groups = new Map(); const distances = graphDistances(model);
   for (const node of model.nodes) {
     if (node.id === model.centerId) { positions.set(node.id, { x: centerX, y: centerY }); continue; }
@@ -82,8 +91,9 @@ function localLayout(model) {
   }
   for (const [key, group] of groups) {
     const count = group.nodes.length; const entity = group.kind === "entity";
-    const radiusX = Math.min(510, Math.max((entity ? 112 : 146) + (group.hops - 1) * (entity ? 82 : 108), 72 + count * 5.2));
-    const radiusY = Math.min(320, Math.max((entity ? 76 : 102) + (group.hops - 1) * (entity ? 58 : 76), 52 + count * 3.5));
+    const baseX = Math.max(54, Math.min(146, width * .22)); const baseY = Math.max(48, Math.min(102, height * .18));
+    const radiusX = Math.min(width * .43, Math.max((entity ? baseX * .76 : baseX) + (group.hops - 1) * baseX * .72, 46 + count * 4.4));
+    const radiusY = Math.min(height * .39, Math.max((entity ? baseY * .76 : baseY) + (group.hops - 1) * baseY * .72, 40 + count * 3.2));
     const start = (hash(key) % 360) * Math.PI / 180;
     group.nodes.sort((a, b) => label(a).localeCompare(label(b), "ko")).forEach((node, index) => {
       const angle = start + index * Math.PI * 2 / count;
@@ -133,7 +143,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     }
   }
   function setLabels(sim, scale = 1) {
-    const showAll = scale >= 1.25 || sim.points.size < 28;
+    const showAll = scale >= 1.25 || sim.points.size <= 12;
     for (const point of sim.points.values()) point.labelElement?.setAttribute("display", showAll || point.id === sim.centerId || point.id === selectedId ? "inline" : "none");
   }
   function tick(sim) {
@@ -197,8 +207,9 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       if (next === 1) { render(model, { running: model.mode !== "global" }); return; }
       const point = toGraphPoint(clientX, clientY);
       const nextVisualScale = presentationScale(next);
-      const ratio = nextVisualScale / base.visualScale;
-      apply(point.x - (point.x - base.x) * ratio, point.y - (point.y - base.y) * ratio, next);
+      // 현재 화면 좌표를 고정한다: translate + scale(point)의 결과가 확대 전후 같아야 한다.
+      const translation = calculateZoomTranslation(base, point, nextVisualScale);
+      apply(translation.x, translation.y, next);
       updateZoom(nextVisualScale, true);
     };
     apply(0, 0, 1);
@@ -221,7 +232,8 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
   function render(nextModel, { running = true } = {}) {
     stop(); model = nextModel; status.textContent = `${graphSummary(model)}${model.mode === "global" ? " · 폴더별 군집" : ""}`; canvas.replaceChildren();
     if (!model.nodes.length) { canvas.textContent = model.mode === "global" ? "표시할 그래프 노드가 없습니다." : "문서의 링크 관계가 없거나 그래프 인덱스에 아직 반영되지 않았습니다."; writeInfo(null); return; }
-    const layout = model.mode === "global" ? globalLayout(model) : localLayout(model); const root = svg("svg", { class: "finance-graph-svg", viewBox: `0 0 ${layout.width} ${layout.height}`, role: "img", "aria-label": "FinanceWiki Graph View" });
+    const bounds = canvas.getBoundingClientRect(); const canvasViewport = { width: Math.max(320, Math.round(bounds.width || window.innerWidth || 1200)), height: Math.max(320, Math.round(bounds.height || window.innerHeight || 760)) };
+    const layout = model.mode === "global" ? globalLayout(model, canvasViewport) : localLayout(model, canvasViewport); const root = svg("svg", { class: "finance-graph-svg", viewBox: `0 0 ${layout.width} ${layout.height}`, role: "img", "aria-label": "FinanceWiki Graph View" });
     const viewport = svg("g"); root.append(viewport); const clusters = svg("g", { class: "finance-graph-clusters" }); const lines = svg("g", { class: "finance-graph-edges" }); const nodes = svg("g", { class: "finance-graph-nodes" }); viewport.append(clusters, lines, nodes);
     for (const cluster of layout.clusters) { clusters.append(svg("circle", { cx: cluster.x, cy: cluster.y, r: cluster.radius, fill: cluster.color })); const text = svg("text", { x: cluster.x, y: cluster.y - cluster.radius - 8, class: "finance-graph-cluster-label" }); text.textContent = shorten(cluster.name, 30); clusters.append(text); }
     const points = new Map();
@@ -242,7 +254,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       lines.append(line);
       return { ...edge, element: line };
     });
-    canvas.append(root); attachPanZoom(root, viewport); simulation = { points, edges, centerId: model.centerId, anchorX: 600, anchorY: 380, scale: 1, alpha: model.mode === "global" ? 0 : 1, frame: 0, running: false }; setLabels(simulation); repaint(simulation); writeInfo(model.nodes.find((node) => node.id === selectedId)); if (running && simulation.alpha > .035) start();
+    canvas.append(root); attachPanZoom(root, viewport); simulation = { points, edges, centerId: model.centerId, anchorX: layout.width / 2, anchorY: layout.height / 2, scale: 1, alpha: model.mode === "global" ? 0 : 1, frame: 0, running: false }; setLabels(simulation); repaint(simulation); writeInfo(model.nodes.find((node) => node.id === selectedId)); if (running && simulation.alpha > .035) start();
   }
   return { render, stop, clear() { stop(); simulation = null; model = null; selectedId = ""; canvas.replaceChildren(); writeInfo(null); } };
 }
