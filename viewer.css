@@ -185,7 +185,7 @@ dialog::backdrop { background: rgba(11, 22, 34, .5); }
 .legend-link, .legend-entity, .legend-semantic { width: 16px; border-top: 2px solid color-mix(in srgb, var(--muted) 75%, transparent); }
 .legend-entity { border-top-color: #2e9d8f; border-top-style: dotted; }
 .legend-semantic { border-top-color: #9564c7; border-top-style: dashed; }
-.graph-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: radial-gradient(circle at 50% 25%, color-mix(in srgb, var(--surface) 88%, transparent), var(--bg)); }
+.graph-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; overscroll-behavior: contain; background: radial-gradient(circle at 50% 25%, color-mix(in srgb, var(--surface) 88%, transparent), var(--bg)); }
 .finance-graph-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .finance-graph-svg:active { cursor: grabbing; }
 .finance-graph-clusters circle { fill-opacity: .09; stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.2; }

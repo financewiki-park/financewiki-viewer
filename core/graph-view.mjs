@@ -93,6 +93,17 @@ function localLayout(model) {
 export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
   let simulation = null; let selectedId = ""; let model = null;
   const status = host.querySelector("[data-graph-status]"); const canvas = host.querySelector("[data-graph-canvas]"); const info = host.querySelector("[data-graph-info]");
+  // iOS Safari는 touch-action: none만으로는 페이지 핀치 확대를 막지 않는다.
+  // 그래프 패널이 열렸을 때만 Safari 전용 gesture 이벤트의 기본 동작을 막는다.
+  const preventNativePagePinch = (event) => {
+    if (!host.hidden && event.cancelable) event.preventDefault();
+  };
+  for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
+    document.addEventListener(eventName, preventNativePagePinch, { capture: true, passive: false });
+  }
+  document.addEventListener("touchmove", (event) => {
+    if (!host.hidden && event.touches.length > 1 && event.cancelable) event.preventDefault();
+  }, { capture: true, passive: false });
   const stop = () => { if (simulation?.frame) cancelAnimationFrame(simulation.frame); if (simulation) simulation.running = false; };
   function writeInfo(node) {
     info.replaceChildren();
