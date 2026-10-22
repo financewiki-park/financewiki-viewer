@@ -14,8 +14,8 @@ function shorten(value, length = 25) { const valueText = String(value || ""); re
 function color(node) { return COLORS[hash(node.kind === "entity" ? node.entity_type : node.document_type) % COLORS.length]; }
 function groupFor(node) { return node.kind === "entity" ? `Entity · ${node.entity_type || "other"}` : node.folder || node.document_type || "Other"; }
 function visualNodeScale(scale) { return Math.min(1.18, 1 + Math.log2(Math.max(1, scale)) * .035); }
-// 32단계 확대에서도 관계선만 남지 않도록, 화면상 거리 확대는 완만하게 적용한다.
-function presentationScale(scale) { return Math.min(6, 1 + Math.log2(Math.max(1, scale))); }
+// 확대는 요청한 비율 그대로 적용한다. 확대 화면에는 가까운 노드만 보여도 된다.
+function presentationScale(scale) { return scale; }
 
 function graphDistances(model) {
   const result = new Map();
@@ -150,11 +150,11 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
         const minimum = ((radius + otherRadius) * nodeScale + 8) / sim.scale;
         if (distance < minimum) { const force = (minimum - distance) * .16 * sim.alpha; const x = dx / distance * force; const y = dy / distance * force; point.vx += x; point.vy += y; other.vx -= x; other.vy -= y; }
         if (sim.scale >= 1.25) {
-          const halfWidth = Math.min(132, Math.max(radius, shorten(label(point.node)).length * 8)) / sim.scale;
-          const otherHalfWidth = Math.min(132, Math.max(otherRadius, shorten(label(other.node)).length * 8)) / sim.scale;
-          const labelY = point.y + (radius + 15) / sim.scale; const otherLabelY = other.y + (otherRadius + 15) / sim.scale;
+          const halfWidth = Math.min(180, Math.max(radius, shorten(label(point.node)).length * 10)) / sim.scale;
+          const otherHalfWidth = Math.min(180, Math.max(otherRadius, shorten(label(other.node)).length * 10)) / sim.scale;
+          const labelY = point.y + (radius + 18) / sim.scale; const otherLabelY = other.y + (otherRadius + 18) / sim.scale;
           const labelDy = labelY - otherLabelY; const labelDx = point.x - other.x;
-          const overlapX = halfWidth + otherHalfWidth + 10 / sim.scale - Math.abs(labelDx); const overlapY = 22 / sim.scale - Math.abs(labelDy);
+          const overlapX = halfWidth + otherHalfWidth + 12 / sim.scale - Math.abs(labelDx); const overlapY = 28 / sim.scale - Math.abs(labelDy);
           if (overlapX > 0 && overlapY > 0) {
             if (overlapX < overlapY) { const direction = Math.sign(labelDx || (hash(`${point.id}:${other.id}:x`) % 2 ? 1 : -1)); const force = overlapX * .3 * sim.alpha * direction; point.vx += force; other.vx -= force; }
             else { const direction = Math.sign(labelDy || (hash(`${point.id}:${other.id}:y`) % 2 ? 1 : -1)); const force = overlapY * .3 * sim.alpha * direction; point.vy += force; other.vy -= force; }
@@ -229,7 +229,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       const initial = layout.positions.get(node.id) || { x: 600, y: 380 }; const point = { id: node.id, x: initial.x, y: initial.y, vx: 0, vy: 0, node };
       const group = svg("g", { class: `finance-graph-node ${node.kind}${node.id === model.centerId ? " current" : ""}`, transform: `translate(${point.x} ${point.y})`, tabindex: "0", role: "button", "aria-label": label(node), "data-graph-node": node.id });
       const radius = node.kind === "entity" ? 7 : node.id === model.centerId ? 19 : model.mode === "global" ? Math.min(12, 4 + Math.log2(1 + (layout.degrees.get(node.id) || 0)) * 1.5) : 13;
-      group.append(svg("circle", { r: radius, fill: color(node) })); const title = svg("title"); title.textContent = label(node); group.append(title); const nodeLabel = svg("text", { y: radius + 13, class: "finance-graph-label" }); nodeLabel.textContent = shorten(label(node)); group.append(nodeLabel); point.labelElement = nodeLabel;
+      group.append(svg("circle", { r: radius, fill: color(node) })); const title = svg("title"); title.textContent = label(node); group.append(title); const nodeLabel = svg("text", { y: radius + 18, class: "finance-graph-label" }); nodeLabel.textContent = shorten(label(node)); group.append(nodeLabel); point.labelElement = nodeLabel;
       const open = () => { selectedId = node.id; writeInfo(node); if (node.kind === "document") onOpenDocument(node.path); };
       group.addEventListener("click", open); group.addEventListener("dblclick", () => { if (node.kind === "document") onCenterDocument(node.path); }); group.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } });
       point.element = group; points.set(node.id, point); nodes.append(group);
