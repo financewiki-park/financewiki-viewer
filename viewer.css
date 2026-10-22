@@ -175,7 +175,6 @@ dialog::backdrop { background: rgba(11, 22, 34, .5); }
 .graph-mode.is-active { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); background: color-mix(in srgb, var(--accent) 13%, var(--surface)); color: var(--accent-strong); }
 .graph-filter-group label { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: .84rem; font-weight: 650; }
 .graph-filter-group input { width: 18px; height: 18px; accent-color: var(--accent); }
-.graph-help { margin: 0; padding: 7px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); color: var(--muted); border-bottom: 1px solid var(--line); font-size: .74rem; background: var(--surface); }
 .graph-legend { display: flex; gap: 8px 13px; overflow-x: auto; padding: 7px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .69rem; white-space: nowrap; scrollbar-width: none; }
 .graph-legend::-webkit-scrollbar { display: none; }
 .graph-legend span { display: inline-flex; align-items: center; gap: 4px; }
@@ -198,7 +197,7 @@ dialog::backdrop { background: rgba(11, 22, 34, .5); }
 .finance-graph-node.current circle { stroke: #18355b; stroke-width: 4; }
 .finance-graph-node.entity circle { stroke-width: 1.8; }
 .finance-graph-node:focus circle { stroke: var(--text); stroke-width: 4; }
-.finance-graph-label { fill: var(--text); font-size: 12px; font-weight: 650; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.finance-graph-label { fill: var(--text); font-size: .74rem; font-weight: 650; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
 .graph-info { display: grid; gap: 4px; min-height: 72px; padding: 11px max(16px, env(safe-area-inset-right)) calc(11px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .8rem; }
 .graph-info strong { color: var(--text); font-size: .9rem; }
 .graph-info button { justify-self: start; min-height: 34px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent-strong); font-weight: 700; }

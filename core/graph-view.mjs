@@ -13,6 +13,7 @@ function label(node) { return node.kind === "entity" ? node.label : node.title; 
 function shorten(value, length = 25) { const valueText = String(value || ""); return valueText.length > length ? `${valueText.slice(0, length - 1)}…` : valueText; }
 function color(node) { return COLORS[hash(node.kind === "entity" ? node.entity_type : node.document_type) % COLORS.length]; }
 function groupFor(node) { return node.kind === "entity" ? `Entity · ${node.entity_type || "other"}` : node.folder || node.document_type || "Other"; }
+function visualNodeScale(scale) { return Math.min(1.18, 1 + Math.log2(Math.max(1, scale)) * .035); }
 
 function graphDistances(model) {
   const result = new Map();
@@ -122,8 +123,12 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       if (!source || !target) continue;
       edge.element.setAttribute("x1", source.x); edge.element.setAttribute("y1", source.y); edge.element.setAttribute("x2", target.x); edge.element.setAttribute("y2", target.y);
     }
-    // 확대는 관계의 거리와 선에만 적용한다. 노드·라벨은 화면에서 읽을 수 있는 크기로 유지한다.
-    for (const point of sim.points.values()) point.element.setAttribute("transform", `translate(${point.x} ${point.y}) scale(${1 / sim.scale})`);
+    // 확대는 관계의 거리 위주로 적용한다. 노드는 조금만 커지고 라벨은 읽기 크기를 유지한다.
+    const nodeScale = visualNodeScale(sim.scale);
+    for (const point of sim.points.values()) {
+      point.element.setAttribute("transform", `translate(${point.x} ${point.y}) scale(${nodeScale / sim.scale})`);
+      point.labelElement?.setAttribute("transform", `scale(${1 / nodeScale})`);
+    }
   }
   function setLabels(sim, scale = 1) {
     const showAll = scale >= 1.25 || sim.points.size < 28;
@@ -139,12 +144,14 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
         if (distance < .01) { const angle = hash(`${point.id}:${other.id}`) * Math.PI / 180; dx = Math.cos(angle); dy = Math.sin(angle); distance = 1; }
         const radius = point.node.kind === "entity" ? 7 : point.id === sim.centerId ? 19 : 13;
         const otherRadius = other.node.kind === "entity" ? 7 : other.id === sim.centerId ? 19 : 13;
-        const minimum = radius + otherRadius + 8 + Math.max(0, sim.scale - 1) * 7;
+        const nodeScale = visualNodeScale(sim.scale);
+        const minimum = ((radius + otherRadius) * nodeScale + 8) / sim.scale;
         if (distance < minimum) { const force = (minimum - distance) * .16 * sim.alpha; const x = dx / distance * force; const y = dy / distance * force; point.vx += x; point.vy += y; other.vx -= x; other.vy -= y; }
         if (sim.scale >= 1.25) {
-          const width = Math.min(170, Math.max(radius, shorten(label(point.node)).length * 6.3)); const otherWidth = Math.min(170, Math.max(otherRadius, shorten(label(other.node)).length * 6.3));
-          const labelDy = (point.y + radius + 8) - (other.y + otherRadius + 8); const labelDx = point.x - other.x;
-          const overlapX = width + otherWidth + 8 - Math.abs(labelDx); const overlapY = 20 - Math.abs(labelDy);
+          const width = Math.min(170, Math.max(radius, shorten(label(point.node)).length * 6.3)) / sim.scale;
+          const otherWidth = Math.min(170, Math.max(otherRadius, shorten(label(other.node)).length * 6.3)) / sim.scale;
+          const labelDy = point.y - other.y; const labelDx = point.x - other.x;
+          const overlapX = width + otherWidth + 8 / sim.scale - Math.abs(labelDx); const overlapY = 20 / sim.scale - Math.abs(labelDy);
           if (overlapX > 0 && overlapY > 0) {
             if (overlapX < overlapY) { const direction = Math.sign(labelDx || (hash(`${point.id}:${other.id}:x`) % 2 ? 1 : -1)); const force = overlapX * .3 * sim.alpha * direction; point.vx += force; other.vx -= force; }
             else { const direction = Math.sign(labelDy || (hash(`${point.id}:${other.id}:y`) % 2 ? 1 : -1)); const force = overlapY * .3 * sim.alpha * direction; point.vy += force; other.vy -= force; }
@@ -155,11 +162,11 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     for (const edge of sim.edges) {
       const source = sim.points.get(edge.source); const target = sim.points.get(edge.target); if (!source || !target) continue;
       const dx = target.x - source.x; const dy = target.y - source.y; const distance = Math.max(1, Math.hypot(dx, dy));
-      const desired = edge.layer === "entity" ? 108 : edge.layer === "semantic" ? 124 : 146; const force = (distance - desired) * .013 * sim.alpha;
+      const desired = (edge.layer === "entity" ? 108 : edge.layer === "semantic" ? 124 : 146) / Math.sqrt(sim.scale); const force = (distance - desired) * .013 * sim.alpha;
       source.vx += dx / distance * force; source.vy += dy / distance * force; target.vx -= dx / distance * force; target.vy -= dy / distance * force;
     }
     for (const point of points) {
-      const strength = point.id === sim.centerId ? .0024 : .00035; point.vx += (600 - point.x) * strength; point.vy += (380 - point.y) * strength;
+      const strength = point.id === sim.centerId ? .0024 : .00035; point.vx += (sim.anchorX - point.x) * strength; point.vy += (sim.anchorY - point.y) * strength;
       point.vx *= .84; point.vy *= .84; point.x += point.vx; point.y += point.vy;
     }
     sim.alpha *= .986; repaint(sim);
@@ -167,12 +174,33 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
   }
   function start() { if (!simulation || simulation.running || simulation.alpha <= .035) return; simulation.running = true; simulation.frame = requestAnimationFrame(() => tick(simulation)); }
   function reheat(scale) { if (!simulation) return; simulation.scale = scale; setLabels(simulation, scale); repaint(simulation); if (simulation.alpha === 0) return; simulation.alpha = Math.max(simulation.alpha, .42); start(); }
+  function reflowLocalGraph(nextScale, focus) {
+    if (!simulation || simulation.alpha === 0 || simulation.scale === nextScale) return;
+    // 확대가 클수록 화면 안의 배치를 완만하게 압축한다. 32배에서도 선만 남지 않고 노드가 함께 보인다.
+    const factor = Math.sqrt(simulation.scale / nextScale);
+    for (const point of simulation.points.values()) {
+      point.x = focus.x + (point.x - focus.x) * factor;
+      point.y = focus.y + (point.y - focus.y) * factor;
+      point.vx *= factor;
+      point.vy *= factor;
+    }
+    simulation.anchorX = focus.x;
+    simulation.anchorY = focus.y;
+  }
   function attachPanZoom(root, viewport) {
     const pointers = new Map(); let drag = null; let pinch = null;
     const apply = (x, y, scale) => { viewport.dataset.x = String(x); viewport.dataset.y = String(y); viewport.dataset.scale = String(scale); viewport.setAttribute("transform", `translate(${x} ${y}) scale(${scale})`); };
     const state = () => ({ x: Number(viewport.dataset.x || 0), y: Number(viewport.dataset.y || 0), scale: Number(viewport.dataset.scale || 1) });
     const toGraphPoint = (clientX, clientY) => { const bounds = root.getBoundingClientRect(); const viewBox = root.viewBox.baseVal; return { x: viewBox.x + (clientX - bounds.left) / bounds.width * viewBox.width, y: viewBox.y + (clientY - bounds.top) / bounds.height * viewBox.height }; };
-    const zoom = (scale, clientX, clientY, base = state()) => { const next = Math.max(1, Math.min(32, scale)); if (next === 1) apply(0, 0, 1); else { const point = toGraphPoint(clientX, clientY); const ratio = next / base.scale; apply(point.x - (point.x - base.x) * ratio, point.y - (point.y - base.y) * ratio, next); } reheat(next); };
+    const zoom = (scale, clientX, clientY, base = state()) => {
+      const next = Math.max(1, Math.min(32, scale));
+      if (next === 1) { render(model, { running: model.mode !== "global" }); return; }
+      const point = toGraphPoint(clientX, clientY);
+      reflowLocalGraph(next, point);
+      const ratio = next / base.scale;
+      apply(point.x - (point.x - base.x) * ratio, point.y - (point.y - base.y) * ratio, next);
+      reheat(next);
+    };
     apply(0, 0, 1);
     root.addEventListener("wheel", (event) => { event.preventDefault(); const current = state(); zoom(current.scale * (event.deltaY < 0 ? 1.16 : .86), event.clientX, event.clientY, current); }, { passive: false });
     root.addEventListener("pointerdown", (event) => {
@@ -206,8 +234,15 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       group.addEventListener("click", open); group.addEventListener("dblclick", () => { if (node.kind === "document") onCenterDocument(node.path); }); group.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } });
       point.element = group; points.set(node.id, point); nodes.append(group);
     }
-    const edges = model.edges.map((edge) => { const line = svg("line", { class: `finance-graph-edge ${edge.layer}` }); lines.append(line); return { ...edge, element: line }; });
-    canvas.append(root); attachPanZoom(root, viewport); simulation = { points, edges, centerId: model.centerId, scale: 1, alpha: model.mode === "global" ? 0 : 1, frame: 0, running: false }; setLabels(simulation); repaint(simulation); writeInfo(model.nodes.find((node) => node.id === selectedId)); if (running && simulation.alpha > .035) start();
+    const edges = model.edges.map((edge) => {
+      const line = svg("line", {
+        class: `finance-graph-edge ${edge.layer}`,
+        "vector-effect": "non-scaling-stroke"
+      });
+      lines.append(line);
+      return { ...edge, element: line };
+    });
+    canvas.append(root); attachPanZoom(root, viewport); simulation = { points, edges, centerId: model.centerId, anchorX: 600, anchorY: 380, scale: 1, alpha: model.mode === "global" ? 0 : 1, frame: 0, running: false }; setLabels(simulation); repaint(simulation); writeInfo(model.nodes.find((node) => node.id === selectedId)); if (running && simulation.alpha > .035) start();
   }
   return { render, stop, clear() { stop(); simulation = null; model = null; selectedId = ""; canvas.replaceChildren(); writeInfo(null); } };
 }
