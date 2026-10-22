@@ -20,12 +20,47 @@ function safeExternalUrl(value) {
   }
 }
 
-function renderPlainInline(value) {
-  return escapeHtml(value)
+function splitTrailingUrlPunctuation(candidate) {
+  let url = candidate;
+  let trailing = "";
+  const peel = () => {
+    trailing = url.at(-1) + trailing;
+    url = url.slice(0, -1);
+  };
+
+  while (/[.,!?;:]$/.test(url)) peel();
+  for (const [open, close] of [["(", ")"], ["[", "]"], ["{", "}"]]) {
+    const count = (text, needle) => text.split(needle).length - 1;
+    while (url.endsWith(close) && count(url, close) > count(url, open)) peel();
+  }
+  return { url, trailing };
+}
+
+function renderPlainInline(value, { autoLink = true } = {}) {
+  let source = String(value ?? "");
+  const links = [];
+
+  if (autoLink) {
+    source = source.replace(/\bhttps?:\/\/[^\s<>"']+/g, (candidate) => {
+      const { url, trailing } = splitTrailingUrlPunctuation(candidate);
+      const external = safeExternalUrl(url);
+      if (!external) return candidate;
+      const token = `\uE000${links.length}\uE001`;
+      links.push(`<a href="${escapeHtml(external)}" target="_blank" rel="noopener noreferrer external">${escapeHtml(external)}</a>${escapeHtml(trailing)}`);
+      return token;
+    });
+  }
+
+  let rendered = escapeHtml(source)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")
     .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>");
+
+  for (let index = 0; index < links.length; index += 1) {
+    rendered = rendered.replace(`\uE000${index}\uE001`, links[index]);
+  }
+  return rendered;
 }
 
 export function renderInline(source) {
@@ -48,7 +83,7 @@ export function renderInline(source) {
         output += alt || "[차단된 이미지]";
       }
     } else if (match[5] !== undefined) {
-      const label = renderPlainInline(match[5]);
+      const label = renderPlainInline(match[5], { autoLink: false });
       const target = match[6].trim().split(/\s+["']/)[0];
       const external = safeExternalUrl(target);
       if (external) {
@@ -60,7 +95,7 @@ export function renderInline(source) {
       }
     } else {
       const [targetPart, labelPart] = match[7].split("|", 2);
-      const label = renderPlainInline((labelPart ?? targetPart).trim());
+      const label = renderPlainInline((labelPart ?? targetPart).trim(), { autoLink: false });
       output += `<a href="#" data-wiki-target="${escapeHtml(targetPart.trim())}">${label}</a>`;
     }
     cursor = match.index + match[0].length;
