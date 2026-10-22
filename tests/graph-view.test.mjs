@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculatePanTranslation, calculatePinchTranslation, calculateZoomTranslation } from "../core/graph-view.mjs";
+import { calculateLabelCollision, calculatePanTranslation, calculatePinchTranslation, calculateZoomTranslation, estimateLabelWidth } from "../core/graph-view.mjs";
 
 function renderedPoint(translation, scale, point) {
   return { x: translation.x + scale * point.x, y: translation.y + scale * point.y };
@@ -29,4 +29,15 @@ test("pinch keeps its original graph anchor under the moving midpoint", () => {
   const midpoint = { x: 500, y: 260 };
   const translation = calculatePinchTranslation(anchor, midpoint, 8);
   assert.deepEqual(renderedPoint(translation, 8, anchor), midpoint);
+});
+
+test("label width estimation accounts for Korean glyphs and stays bounded", () => {
+  assert.ok(estimateLabelWidth("한국은행") > estimateLabelWidth("Korea"));
+  assert.equal(estimateLabelWidth("가".repeat(100)), 220);
+});
+
+test("label collision detects nearby labels but ignores separated labels", () => {
+  const first = { x: 100, y: 100, radius: 13, text: "한국은행" };
+  assert.ok(calculateLabelCollision(first, { x: 110, y: 100, radius: 13, text: "금융시장" }));
+  assert.equal(calculateLabelCollision(first, { x: 400, y: 100, radius: 13, text: "금융시장" }), null);
 });

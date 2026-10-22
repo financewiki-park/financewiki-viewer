@@ -2,6 +2,9 @@ import { graphSummary } from "./graph-core.mjs";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const COLORS = ["#4f88dd", "#b06bd2", "#36aa94", "#e3a543", "#db6b89", "#62aacf"];
+const LABEL_FONT_SIZE = 17;
+const LABEL_COLLISION_SCALE = 1.25;
+const LABEL_MAX_WIDTH = 220;
 
 function svg(name, attributes = {}) {
   const node = document.createElementNS(SVG_NS, name);
@@ -16,6 +19,23 @@ function groupFor(node) { return node.kind === "entity" ? `Entity · ${node.enti
 function visualNodeScale(scale) { return Math.min(1.18, 1 + Math.log2(Math.max(1, scale)) * .035); }
 // 확대는 요청한 비율 그대로 적용한다. 확대 화면에는 가까운 노드만 보여도 된다.
 function presentationScale(scale) { return scale; }
+
+export function estimateLabelWidth(value, fontSize = LABEL_FONT_SIZE) {
+  const width = [...String(value || "")].reduce((sum, character) => {
+    const wide = /[\u2E80-\u9FFF\uAC00-\uD7AF]/u.test(character);
+    return sum + fontSize * (wide ? 1 : .56);
+  }, 0);
+  return Math.min(LABEL_MAX_WIDTH, width);
+}
+
+export function calculateLabelCollision(first, second, scale = LABEL_COLLISION_SCALE) {
+  const firstY = first.y + (first.radius + 18) / scale;
+  const secondY = second.y + (second.radius + 18) / scale;
+  const overlapX = (estimateLabelWidth(first.text) + estimateLabelWidth(second.text)) / (2 * scale) + 6 - Math.abs(first.x - second.x);
+  const overlapY = (LABEL_FONT_SIZE + 6) / scale - Math.abs(firstY - secondY);
+  if (overlapX <= 0 || overlapY <= 0) return null;
+  return { axis: overlapX < overlapY ? "x" : "y", overlap: Math.min(overlapX, overlapY), firstY, secondY };
+}
 
 export function calculateZoomTranslation(base, focus, nextScale) {
   const ratio = nextScale / base.visualScale;
@@ -173,6 +193,23 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
         const repulsion = Math.min(1.2, 720 / (distance * distance)) * sim.alpha;
         const repulsionX = dx / distance * repulsion; const repulsionY = dy / distance * repulsion;
         point.vx += repulsionX; point.vy += repulsionY; other.vx -= repulsionX; other.vy -= repulsionY;
+        // 라벨은 확대 때 물리를 다시 켜지 않고, 처음 자리 잡을 때 보이는 크기를
+        // 기준으로 충돌시킨다. 확대하면 이 간격은 더 넓어지므로 겹침이 줄어든다.
+        const labelCollision = calculateLabelCollision(
+          { x: point.x, y: point.y, radius, text: shorten(label(point.node)) },
+          { x: other.x, y: other.y, radius: otherRadius, text: shorten(label(other.node)) }
+        );
+        if (labelCollision) {
+          if (labelCollision.axis === "x") {
+            const direction = Math.sign(point.x - other.x || (hash(`${point.id}:${other.id}:label-x`) % 2 ? 1 : -1));
+            const force = Math.min(1.4, labelCollision.overlap * .1) * sim.alpha * direction;
+            point.vx += force; other.vx -= force;
+          } else {
+            const direction = Math.sign(labelCollision.firstY - labelCollision.secondY || (hash(`${point.id}:${other.id}:label-y`) % 2 ? 1 : -1));
+            const force = Math.min(1.4, labelCollision.overlap * .1) * sim.alpha * direction;
+            point.vy += force; other.vy -= force;
+          }
+        }
       }
     }
     for (const edge of sim.edges) {
