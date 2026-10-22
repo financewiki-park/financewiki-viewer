@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateZoomTranslation } from "../core/graph-view.mjs";
+import { calculatePanTranslation, calculatePinchTranslation, calculateZoomTranslation } from "../core/graph-view.mjs";
 
 function renderedPoint(translation, scale, point) {
   return { x: translation.x + scale * point.x, y: translation.y + scale * point.y };
@@ -17,4 +17,16 @@ test("successive zooms keep the same focal graph point stable", () => {
   const first = calculateZoomTranslation({ x: 0, y: 0, visualScale: 1 }, focus, 2);
   const second = calculateZoomTranslation({ ...first, visualScale: 2 }, focus, 16);
   assert.deepEqual(renderedPoint(second, 16, focus), focus);
+});
+
+test("panning follows the pointer by the same viewport distance at high zoom", () => {
+  const translation = calculatePanTranslation({ x: -420, y: -180 }, { x: 120, y: 80 }, { x: 180, y: 105 });
+  assert.deepEqual(translation, { x: -360, y: -155 });
+});
+
+test("pinch keeps its original graph anchor under the moving midpoint", () => {
+  const anchor = { x: 90, y: 45 };
+  const midpoint = { x: 500, y: 260 };
+  const translation = calculatePinchTranslation(anchor, midpoint, 8);
+  assert.deepEqual(renderedPoint(translation, 8, anchor), midpoint);
 });

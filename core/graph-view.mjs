@@ -25,6 +25,14 @@ export function calculateZoomTranslation(base, focus, nextScale) {
   };
 }
 
+export function calculatePanTranslation(base, start, current) {
+  return { x: base.x + current.x - start.x, y: base.y + current.y - start.y };
+}
+
+export function calculatePinchTranslation(anchor, midpoint, nextScale) {
+  return { x: midpoint.x - anchor.x * nextScale, y: midpoint.y - anchor.y * nextScale };
+}
+
 function graphDistances(model) {
   const result = new Map();
   if (!model.centerId) return result;
@@ -104,7 +112,7 @@ function localLayout(model, viewport) {
 }
 
 export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
-  let simulation = null; let selectedId = ""; let model = null; let settleTimer = 0;
+  let simulation = null; let selectedId = ""; let model = null;
   const status = host.querySelector("[data-graph-status]"); const canvas = host.querySelector("[data-graph-canvas]"); const info = host.querySelector("[data-graph-info]");
   // iOS Safari는 touch-action: none만으로는 페이지 핀치 확대를 막지 않는다.
   // 그래프 패널이 열렸을 때만 Safari 전용 gesture 이벤트의 기본 동작을 막는다.
@@ -117,7 +125,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
   document.addEventListener("touchmove", (event) => {
     if (!host.hidden && event.touches.length > 1 && event.cancelable) event.preventDefault();
   }, { capture: true, passive: false });
-  const stop = () => { if (simulation?.frame) cancelAnimationFrame(simulation.frame); if (settleTimer) clearTimeout(settleTimer); settleTimer = 0; if (simulation) simulation.running = false; };
+  const stop = () => { if (simulation?.frame) cancelAnimationFrame(simulation.frame); if (simulation) simulation.running = false; };
   function writeInfo(node) {
     info.replaceChildren();
     if (!node) { info.textContent = "노드를 탭하면 문서를 엽니다. 선택 후 ‘이 문서를 중심으로’로 Local 그래프의 중심을 바꿉니다."; return; }
@@ -156,20 +164,15 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
         if (distance < .01) { const angle = hash(`${point.id}:${other.id}`) * Math.PI / 180; dx = Math.cos(angle); dy = Math.sin(angle); distance = 1; }
         const radius = point.node.kind === "entity" ? 7 : point.id === sim.centerId ? 19 : 13;
         const otherRadius = other.node.kind === "entity" ? 7 : other.id === sim.centerId ? 19 : 13;
-        const nodeScale = visualNodeScale(sim.scale);
-        const minimum = ((radius + otherRadius) * nodeScale + 8) / sim.scale;
+        // 물리 배치는 카메라 배율과 무관하다. 확대 중 배율을 힘 계산에 섞으면
+        // 손을 뗀 뒤 노드가 다시 튀거나 수축하는 현상이 생긴다.
+        const minimum = radius + otherRadius + 8;
         if (distance < minimum) { const force = (minimum - distance) * .16 * sim.alpha; const x = dx / distance * force; const y = dy / distance * force; point.vx += x; point.vy += y; other.vx -= x; other.vy -= y; }
-        if (sim.scale >= 1.25) {
-          const halfWidth = Math.min(180, Math.max(radius, shorten(label(point.node)).length * 10)) / sim.scale;
-          const otherHalfWidth = Math.min(180, Math.max(otherRadius, shorten(label(other.node)).length * 10)) / sim.scale;
-          const labelY = point.y + (radius + 18) / sim.scale; const otherLabelY = other.y + (otherRadius + 18) / sim.scale;
-          const labelDy = labelY - otherLabelY; const labelDx = point.x - other.x;
-          const overlapX = halfWidth + otherHalfWidth + 12 / sim.scale - Math.abs(labelDx); const overlapY = 28 / sim.scale - Math.abs(labelDy);
-          if (overlapX > 0 && overlapY > 0) {
-            if (overlapX < overlapY) { const direction = Math.sign(labelDx || (hash(`${point.id}:${other.id}:x`) % 2 ? 1 : -1)); const force = overlapX * .3 * sim.alpha * direction; point.vx += force; other.vx -= force; }
-            else { const direction = Math.sign(labelDy || (hash(`${point.id}:${other.id}:y`) % 2 ? 1 : -1)); const force = overlapY * .3 * sim.alpha * direction; point.vy += force; other.vy -= force; }
-          }
-        }
+        // 겹쳤을 때만 튕기는 대신 가까운 노드끼리 미리 조금씩 밀어낸다.
+        // 거리가 멀어지면 빠르게 약해져 화면 가장자리로 흩어지지 않는다.
+        const repulsion = Math.min(1.2, 720 / (distance * distance)) * sim.alpha;
+        const repulsionX = dx / distance * repulsion; const repulsionY = dy / distance * repulsion;
+        point.vx += repulsionX; point.vy += repulsionY; other.vx -= repulsionX; other.vy -= repulsionY;
       }
     }
     for (const edge of sim.edges) {
@@ -182,35 +185,28 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       const strength = point.id === sim.centerId ? .0024 : .00035; point.vx += (sim.anchorX - point.x) * strength; point.vy += (sim.anchorY - point.y) * strength;
       point.vx *= .84; point.vy *= .84; point.x += point.vx; point.y += point.vy;
     }
-    sim.alpha *= .986; repaint(sim);
+    sim.alpha *= .978; repaint(sim);
     if (sim.alpha > .035) sim.frame = requestAnimationFrame(() => tick(sim)); else { sim.running = false; sim.frame = 0; }
   }
   function start() { if (!simulation || simulation.running || simulation.alpha <= .035) return; simulation.running = true; simulation.frame = requestAnimationFrame(() => tick(simulation)); }
-  function updateZoom(scale, settle = false) {
+  function updateZoom(scale) {
     if (!simulation) return;
     simulation.scale = scale; setLabels(simulation, scale); repaint(simulation);
-    if (!settle || simulation.alpha === 0) return;
-    if (settleTimer) clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => {
-      settleTimer = 0;
-      if (!simulation || simulation.alpha === 0) return;
-      simulation.alpha = Math.max(simulation.alpha, .16); start();
-    }, 120);
   }
   function attachPanZoom(root, viewport) {
     const pointers = new Map(); let drag = null; let pinch = null;
     const apply = (x, y, scale) => { const visualScale = presentationScale(scale); viewport.dataset.x = String(x); viewport.dataset.y = String(y); viewport.dataset.scale = String(scale); viewport.dataset.visualScale = String(visualScale); viewport.setAttribute("transform", `translate(${x} ${y}) scale(${visualScale})`); };
     const state = () => ({ x: Number(viewport.dataset.x || 0), y: Number(viewport.dataset.y || 0), scale: Number(viewport.dataset.scale || 1), visualScale: Number(viewport.dataset.visualScale || 1) });
-    const toGraphPoint = (clientX, clientY) => { const bounds = root.getBoundingClientRect(); const viewBox = root.viewBox.baseVal; return { x: viewBox.x + (clientX - bounds.left) / bounds.width * viewBox.width, y: viewBox.y + (clientY - bounds.top) / bounds.height * viewBox.height }; };
+    const toViewportPoint = (clientX, clientY) => { const bounds = root.getBoundingClientRect(); const viewBox = root.viewBox.baseVal; return { x: viewBox.x + (clientX - bounds.left) / bounds.width * viewBox.width, y: viewBox.y + (clientY - bounds.top) / bounds.height * viewBox.height }; };
     const zoom = (scale, clientX, clientY, base = state()) => {
       const next = Math.max(1, Math.min(32, scale));
-      if (next === 1) { render(model, { running: model.mode !== "global" }); return; }
-      const point = toGraphPoint(clientX, clientY);
+      if (next === 1) { apply(0, 0, 1); updateZoom(1); return; }
+      const point = toViewportPoint(clientX, clientY);
       const nextVisualScale = presentationScale(next);
       // 현재 화면 좌표를 고정한다: translate + scale(point)의 결과가 확대 전후 같아야 한다.
       const translation = calculateZoomTranslation(base, point, nextVisualScale);
       apply(translation.x, translation.y, next);
-      updateZoom(nextVisualScale, true);
+      updateZoom(nextVisualScale);
     };
     apply(0, 0, 1);
     root.addEventListener("wheel", (event) => { event.preventDefault(); const current = state(); zoom(current.scale * (event.deltaY < 0 ? 1.16 : .86), event.clientX, event.clientY, current); }, { passive: false });
@@ -218,13 +214,33 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       if (event.target.closest("[data-graph-node]")) return;
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY }); root.setPointerCapture(event.pointerId);
       if (pointers.size === 1) { const current = state(); drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: current.x, y: current.y, scale: current.scale }; }
-      if (pointers.size === 2) { const [first, second] = [...pointers.values()]; const current = state(); pinch = { distance: Math.max(1, Math.hypot(first.x - second.x, first.y - second.y)), state: current }; drag = null; }
+      if (pointers.size === 2) {
+        const [first, second] = [...pointers.values()]; const current = state();
+        const midpoint = toViewportPoint((first.x + second.x) / 2, (first.y + second.y) / 2);
+        pinch = {
+          distance: Math.max(1, Math.hypot(first.x - second.x, first.y - second.y)),
+          state: current,
+          anchor: { x: (midpoint.x - current.x) / current.visualScale, y: (midpoint.y - current.y) / current.visualScale }
+        };
+        drag = null;
+      }
     });
     root.addEventListener("pointermove", (event) => {
       if (!pointers.has(event.pointerId)) return; pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (pointers.size === 2 && pinch) { const [first, second] = [...pointers.values()]; zoom(pinch.state.scale * Math.hypot(first.x - second.x, first.y - second.y) / pinch.distance, (first.x + second.x) / 2, (first.y + second.y) / 2, pinch.state); return; }
+      if (pointers.size === 2 && pinch) {
+        const [first, second] = [...pointers.values()];
+        const next = Math.max(1, Math.min(32, pinch.state.scale * Math.hypot(first.x - second.x, first.y - second.y) / pinch.distance));
+        if (next === 1) { apply(0, 0, 1); updateZoom(1); return; }
+        const midpoint = toViewportPoint((first.x + second.x) / 2, (first.y + second.y) / 2);
+        const translation = calculatePinchTranslation(pinch.anchor, midpoint, next);
+        apply(translation.x, translation.y, next);
+        updateZoom(next);
+        return;
+      }
       if (!drag || drag.pointerId !== event.pointerId || drag.scale <= 1) return;
-      apply(drag.x + (event.clientX - drag.startX) / drag.visualScale, drag.y + (event.clientY - drag.startY) / drag.visualScale, drag.scale);
+      const start = toViewportPoint(drag.startX, drag.startY); const current = toViewportPoint(event.clientX, event.clientY);
+      const translation = calculatePanTranslation(drag, start, current);
+      apply(translation.x, translation.y, drag.scale);
     });
     const release = (event) => { if (root.hasPointerCapture(event.pointerId)) root.releasePointerCapture(event.pointerId); pointers.delete(event.pointerId); if (pointers.size < 2) pinch = null; if (!pointers.size) drag = null; };
     root.addEventListener("pointerup", release); root.addEventListener("pointercancel", release);
