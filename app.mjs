@@ -7,6 +7,7 @@ import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./cor
 
 const INDEX_PATH = "viewer-index.json";
 const PAGE_SIZE = 200;
+const INDEX_REFRESH_INTERVAL_MS = 30_000;
 const elements = Object.fromEntries(
   [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
 );
@@ -24,6 +25,7 @@ const state = {
   retry: null,
   openSequence: 0,
   openController: null,
+  refreshPromise: null,
 };
 
 function repositoryKey(config = state.config) {
@@ -201,6 +203,68 @@ async function connect(config, saveCredentials = true) {
   if (offline) showToast("네트워크 오류로 저장된 인덱스를 열었습니다.");
 }
 
+async function refreshCanonicalIndex({ announce = false } = {}) {
+  if (!state.provider || !state.config || !state.index) return null;
+  if (state.refreshPromise) return state.refreshPromise;
+
+  const refresh = (async () => {
+    const key = repositoryKey();
+    const previousDocument = state.currentDocument;
+    const previousFragment = state.currentFragment;
+    const { data: payload } = await state.provider.fetchJson(INDEX_PATH);
+    const nextIndex = new DocumentIndex(payload);
+
+    credentialStore.saveIndex(key, payload);
+    state.index = nextIndex;
+    state.filteredDocuments = nextIndex.documents;
+    state.visibleCount = PAGE_SIZE;
+    renderTree();
+    applyFilter();
+    updateConnectionDetails(true);
+    elements.repositoryStatus.textContent = `${state.provider.repositoryLabel} · GitHub ${new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`;
+
+    if (previousDocument) {
+      let current = nextIndex.documents.find((item) => item.path === previousDocument.path);
+      if (!current) {
+        const moved = nextIndex.documents.filter((item) => item.hash && item.hash === previousDocument.hash);
+        current = moved.length === 1 ? moved[0] : null;
+      }
+      if (!current) {
+        showBrowser();
+        showToast("GitHub에서 문서가 삭제되거나 이동돼 목록을 갱신했습니다.");
+      } else if (current.path !== previousDocument.path || current.hash !== previousDocument.hash) {
+        await openDocument(current, previousFragment, { pushHistory: false });
+        showToast(current.path === previousDocument.path ? "GitHub의 최신 문서로 갱신했습니다." : "GitHub의 이동된 문서를 열었습니다.");
+      } else {
+        state.currentDocument = current;
+      }
+    }
+
+    if (announce) showToast(`GitHub 최신 상태를 반영했습니다. 문서 ${nextIndex.documents.length}개`);
+    return nextIndex;
+  })();
+
+  state.refreshPromise = refresh;
+  elements.refreshButton?.setAttribute("aria-busy", "true");
+  if (elements.refreshButton) elements.refreshButton.disabled = true;
+  try {
+    return await refresh;
+  } catch (error) {
+    if (announce) {
+      showError(
+        "GitHub 최신 상태를 반영하지 못했습니다.",
+        error?.message || "네트워크 연결을 확인하세요.",
+        () => refreshCanonicalIndex({ announce: true }),
+      );
+    }
+    return null;
+  } finally {
+    if (state.refreshPromise === refresh) state.refreshPromise = null;
+    elements.refreshButton?.removeAttribute("aria-busy");
+    if (elements.refreshButton) elements.refreshButton.disabled = false;
+  }
+}
+
 // 늦게 도착한 이전 문서 응답이 화면을 덮어쓰지 않도록 문서 열기마다 순번을 올린다.
 function beginNavigation() {
   state.openController?.abort();
@@ -347,6 +411,7 @@ elements.settingsButton.addEventListener("click", () => {
   updateConnectionDetails(Boolean(state.provider));
   elements.settingsDialog.showModal();
 });
+elements.refreshButton?.addEventListener("click", () => refreshCanonicalIndex({ announce: true }));
 elements.reconfigureButton.addEventListener("click", () => {
   beginNavigation();
   elements.settingsDialog.close();
@@ -393,6 +458,13 @@ async function start() {
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
+  window.setInterval(() => {
+    if (!document.hidden) refreshCanonicalIndex();
+  }, INDEX_REFRESH_INTERVAL_MS);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshCanonicalIndex();
+});
 
 start();
