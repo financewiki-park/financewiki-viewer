@@ -109,6 +109,7 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in sr
 .browser-screen, .viewer-screen, .connect-panel, .document-nav, .markdown-body { min-width: 0; }
 .document-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .document-path { min-width: 0; color: var(--muted); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-graph-button { margin-left: auto; }
 .loading { padding: 30px 0; color: var(--muted); text-align: center; }
 .markdown-body { overflow-wrap: anywhere; line-height: 1.72; }
 .markdown-body > :first-child { margin-top: 0; }
@@ -153,6 +154,54 @@ dialog::backdrop { background: rgba(11, 22, 34, .5); }
 .toast { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 30; transform: translateX(-50%); width: min(calc(100% - 32px), 480px); padding: 12px 15px; border-radius: 12px; background: var(--text); color: var(--surface); text-align: center; box-shadow: var(--shadow); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 [hidden] { display: none !important; }
+
+.graph-screen {
+  position: fixed;
+  inset: calc(58px + env(safe-area-inset-top)) 0 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+.graph-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px max(16px, env(safe-area-inset-right)) 9px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
+.graph-header > div { display: grid; gap: 2px; min-width: 0; }
+.graph-header strong { font-size: 1rem; }
+.graph-header span { color: var(--muted); font-size: .78rem; }
+.graph-controls { display: grid; gap: 9px; padding: 10px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
+.graph-mode-group, .graph-filter-group { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.graph-mode-group::-webkit-scrollbar, .graph-filter-group::-webkit-scrollbar { display: none; }
+.graph-mode { flex: 0 0 auto; min-height: 36px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font-size: .86rem; font-weight: 700; }
+.graph-mode.is-active { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); background: color-mix(in srgb, var(--accent) 13%, var(--surface)); color: var(--accent-strong); }
+.graph-filter-group label { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: .84rem; font-weight: 650; }
+.graph-filter-group input { width: 18px; height: 18px; accent-color: var(--accent); }
+.graph-help { margin: 0; padding: 7px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); color: var(--muted); border-bottom: 1px solid var(--line); font-size: .74rem; background: var(--surface); }
+.graph-legend { display: flex; gap: 8px 13px; overflow-x: auto; padding: 7px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .69rem; white-space: nowrap; scrollbar-width: none; }
+.graph-legend::-webkit-scrollbar { display: none; }
+.graph-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.graph-legend i { display: inline-block; flex: 0 0 auto; }
+.legend-node { width: 10px; height: 10px; border-radius: 50%; background: #4f88dd; }
+.legend-current { width: 12px; height: 12px; border: 3px solid #18355b; border-radius: 50%; background: #4f88dd; }
+.legend-link, .legend-entity, .legend-semantic { width: 16px; border-top: 2px solid color-mix(in srgb, var(--muted) 75%, transparent); }
+.legend-entity { border-top-color: #2e9d8f; border-top-style: dotted; }
+.legend-semantic { border-top-color: #9564c7; border-top-style: dashed; }
+.graph-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: radial-gradient(circle at 50% 25%, color-mix(in srgb, var(--surface) 88%, transparent), var(--bg)); }
+.finance-graph-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.finance-graph-svg:active { cursor: grabbing; }
+.finance-graph-clusters circle { fill-opacity: .09; stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.2; }
+.finance-graph-cluster-label { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+.finance-graph-edge { stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.2; stroke-linecap: round; }
+.finance-graph-edge.entity { stroke: color-mix(in srgb, #2e9d8f 65%, transparent); stroke-dasharray: 2 5; }
+.finance-graph-edge.semantic { stroke: #9564c7; stroke-dasharray: 6 4; }
+.finance-graph-node { cursor: pointer; outline: none; }
+.finance-graph-node circle { stroke: var(--surface); stroke-width: 2.5; }
+.finance-graph-node.current circle { stroke: #18355b; stroke-width: 4; }
+.finance-graph-node.entity circle { stroke-width: 1.8; }
+.finance-graph-node:focus circle { stroke: var(--text); stroke-width: 4; }
+.finance-graph-label { fill: var(--text); font-size: 12px; font-weight: 650; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.graph-info { display: grid; gap: 4px; min-height: 72px; padding: 11px max(16px, env(safe-area-inset-right)) calc(11px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .8rem; }
+.graph-info strong { color: var(--text); font-size: .9rem; }
+.graph-info button { justify-self: start; min-height: 34px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent-strong); font-weight: 700; }
 
 @media (min-width: 700px) {
   main { padding-top: 30px; }

@@ -12,6 +12,8 @@ const SHELL_PATHS = [
   "./core/document-cache.mjs",
   "./core/document-index.mjs",
   "./core/github-provider.mjs",
+  "./core/graph-core.mjs",
+  "./core/graph-view.mjs",
   "./core/markdown.mjs",
   "./core/path-utils.mjs",
 ];

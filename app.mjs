@@ -4,6 +4,8 @@ import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/docume
 import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
+import { createGraphModel, GRAPH_INDEX_PATH, parseGraphIndex } from "./core/graph-core.mjs";
+import { createGraphView } from "./core/graph-view.mjs";
 
 const INDEX_PATH = "viewer-index.json";
 const PAGE_SIZE = 200;
@@ -26,6 +28,10 @@ const state = {
   openSequence: 0,
   openController: null,
   refreshPromise: null,
+  graph: null,
+  graphLoadPromise: null,
+  graphMode: "local-1",
+  graphCenterPath: "",
 };
 
 function repositoryKey(config = state.config) {
@@ -33,9 +39,10 @@ function repositoryKey(config = state.config) {
 }
 
 function showOnly(screen) {
-  for (const element of [elements.connectScreen, elements.browserScreen, elements.viewerScreen]) {
+  for (const element of [elements.connectScreen, elements.browserScreen, elements.viewerScreen, elements.graphScreen]) {
     element.hidden = element !== screen;
   }
+  if (screen !== elements.graphScreen) graphView?.stop();
   elements.errorPanel.hidden = true;
 }
 
@@ -192,6 +199,9 @@ async function connect(config, saveCredentials = true) {
   state.provider = provider;
   state.config = { ...config };
   state.index = index;
+  state.graph = null;
+  state.graphLoadPromise = null;
+  state.graphCenterPath = "";
   state.filteredDocuments = index.documents;
   state.visibleCount = PAGE_SIZE;
   if (saveCredentials) credentialStore.save(config);
@@ -263,6 +273,73 @@ async function refreshCanonicalIndex({ announce = false } = {}) {
     elements.refreshButton?.removeAttribute("aria-busy");
     if (elements.refreshButton) elements.refreshButton.disabled = false;
   }
+}
+
+function graphFilters() {
+  return { links: elements.graphLinks.checked, entities: elements.graphEntities.checked, semantic: elements.graphSemantic.checked };
+}
+
+function setGraphMode(mode) {
+  state.graphMode = mode;
+  for (const button of document.querySelectorAll("[data-graph-mode]")) {
+    const active = button.dataset.graphMode === mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+}
+
+function renderGraph() {
+  if (!state.graph || !state.graphCenterPath) return;
+  const model = createGraphModel(state.graph, { mode: state.graphMode, centerPath: state.graphCenterPath, ...graphFilters() });
+  graphView.render(model, { running: state.graphMode !== "global" });
+}
+
+async function loadGraphIndex() {
+  if (state.graph) return state.graph;
+  if (state.graphLoadPromise) return state.graphLoadPromise;
+  const key = repositoryKey();
+  const load = (async () => {
+    try {
+      const { data } = await state.provider.fetchJson(GRAPH_INDEX_PATH);
+      credentialStore.saveGraphIndex(key, data);
+      return parseGraphIndex(data);
+    } catch (error) {
+      const cached = credentialStore.loadGraphIndex(key);
+      if (!cached) throw error;
+      showToast("저장된 그래프 인덱스를 열었습니다.");
+      return parseGraphIndex(cached);
+    }
+  })();
+  state.graphLoadPromise = load;
+  try {
+    state.graph = await load;
+    return state.graph;
+  } finally {
+    if (state.graphLoadPromise === load) state.graphLoadPromise = null;
+  }
+}
+
+async function showGraph() {
+  if (!state.currentDocument) return;
+  elements.graphOpenButton.disabled = true;
+  elements.graphOpenButton.textContent = "그래프 준비 중…";
+  try {
+    await loadGraphIndex();
+    state.graphCenterPath = state.currentDocument.path;
+    setGraphMode(state.graphMode);
+    renderGraph();
+    showOnly(elements.graphScreen);
+  } catch (error) {
+    showError("그래프를 불러오지 못했습니다.", error?.message || "그래프 인덱스와 GitHub 연결을 확인하세요.", showGraph);
+  } finally {
+    elements.graphOpenButton.disabled = false;
+    elements.graphOpenButton.textContent = "그래프";
+  }
+}
+
+function closeGraph() {
+  graphView.stop();
+  showOnly(elements.viewerScreen);
 }
 
 // 늦게 도착한 이전 문서 응답이 화면을 덮어쓰지 않도록 문서 열기마다 순번을 올린다.
@@ -360,6 +437,21 @@ function showBrowser({ pushHistory = false } = {}) {
   if (pushHistory) history.pushState({ financewikiRoot: true }, "", location.pathname);
 }
 
+const graphView = createGraphView({
+  host: elements.graphScreen,
+  onOpenDocument(path) {
+    const documentItem = state.index?.resolve(path)?.document;
+    if (!documentItem) return;
+    graphView.stop();
+    openDocument(documentItem);
+  },
+  onCenterDocument(path) {
+    state.graphCenterPath = path;
+    setGraphMode("local-1");
+    renderGraph();
+  },
+});
+
 elements.connectForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const stored = credentialStore.load();
@@ -405,6 +497,14 @@ elements.documentContent.addEventListener("click", (event) => {
 });
 
 elements.backToListButton.addEventListener("click", () => showBrowser({ pushHistory: true }));
+elements.graphOpenButton.addEventListener("click", showGraph);
+elements.graphCloseButton.addEventListener("click", closeGraph);
+for (const button of document.querySelectorAll("[data-graph-mode]")) {
+  button.addEventListener("click", () => { setGraphMode(button.dataset.graphMode); renderGraph(); });
+}
+for (const control of [elements.graphLinks, elements.graphEntities, elements.graphSemantic]) {
+  control.addEventListener("change", renderGraph);
+}
 elements.homeButton.addEventListener("click", () => state.index ? showBrowser({ pushHistory: true }) : showOnly(elements.connectScreen));
 elements.retryButton.addEventListener("click", () => state.retry?.());
 elements.settingsButton.addEventListener("click", () => {
@@ -441,6 +541,11 @@ window.addEventListener("popstate", (event) => {
   }
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) graphView.stop();
+  if (!document.hidden) refreshCanonicalIndex();
+});
+
 async function start() {
   history.replaceState({ financewikiRoot: true }, "", location.pathname);
   const saved = credentialStore.load();
@@ -462,9 +567,5 @@ async function start() {
     if (!document.hidden) refreshCanonicalIndex();
   }, INDEX_REFRESH_INTERVAL_MS);
 }
-
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshCanonicalIndex();
-});
 
 start();
