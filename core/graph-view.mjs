@@ -2,7 +2,7 @@ import { graphSummary } from "./graph-core.mjs";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const COLORS = ["#4f88dd", "#b06bd2", "#36aa94", "#e3a543", "#db6b89", "#62aacf"];
-const LABEL_FONT_SIZE = 17;
+const LABEL_FONT_SIZE = 13;
 const LABEL_COLLISION_SCALE = 1.25;
 const LABEL_MAX_WIDTH = 220;
 
