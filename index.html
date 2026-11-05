@@ -46,6 +46,15 @@
         <span id="documentCount"></span>
         <span id="repositoryStatus" class="muted"></span>
       </div>
+      <div class="browse-tabs" role="group" aria-label="탐색 방식">
+        <button id="folderTab" type="button" aria-pressed="true">폴더</button>
+        <button id="topicTab" type="button" aria-pressed="false" hidden>주제 <span id="topicCount"></span></button>
+      </div>
+      <nav id="topicCatalog" class="topic-catalog" aria-label="주제 태그 탐색" hidden></nav>
+      <div id="topicSelection" class="topic-selection" hidden>
+        <button id="topicBackButton" class="secondary-button compact" type="button">전체 주제</button>
+        <h2 id="selectedTopicTitle"></h2>
+      </div>
       <nav id="documentTree" class="document-tree" aria-label="문서 폴더 탐색"></nav>
       <ol id="documentList" class="document-list" hidden></ol>
       <button id="moreButton" class="secondary-button" type="button" hidden>더 보기</button>
@@ -57,8 +66,16 @@
         <span id="documentPath" class="document-path"></span>
         <button id="graphOpenButton" class="secondary-button compact document-graph-button" type="button">그래프</button>
       </nav>
+      <section id="documentTopics" class="document-topics" aria-label="문서 주제" hidden>
+        <span class="topic-caption">주제</span>
+        <div id="documentTopicChips" class="topic-chips"></div>
+      </section>
       <div id="documentLoading" class="loading" hidden>문서를 불러오는 중…</div>
       <div id="documentContent" class="markdown-body"></div>
+      <section id="relatedTopics" class="related-topics" aria-labelledby="relatedTopicsTitle" hidden>
+        <h2 id="relatedTopicsTitle">같은 주제의 문서</h2>
+        <div id="relatedTopicDocuments" class="related-documents"></div>
+      </section>
     </article>
 
     <section id="graphScreen" class="graph-screen" aria-label="문서 관계 그래프" hidden>
@@ -77,16 +94,15 @@
         </div>
         <div class="graph-filter-group">
           <label><input id="graphLinks" type="checkbox" checked> Links</label>
-          <label><input id="graphEntities" type="checkbox"> Entities</label>
-          <label><input id="graphSemantic" type="checkbox"> Semantic</label>
+          <label><input id="graphTopics" type="checkbox" checked> Topics</label>
         </div>
       </div>
       <div class="graph-legend" aria-label="그래프 범례">
         <span><i class="legend-node"></i>색 노드: 문서 유형</span>
         <span><i class="legend-current"></i>굵은 테두리: 중심 문서</span>
         <span><i class="legend-link"></i>실선: Wiki Link</span>
-        <span><i class="legend-entity"></i>점선: Entity</span>
-        <span><i class="legend-semantic"></i>파선: 검수 완료 Semantic</span>
+        <span><i class="legend-topic"></i># 노드: 표준 주제</span>
+        <span><i class="legend-topic-edge"></i>점선: 문서–주제 연결</span>
       </div>
       <div class="graph-canvas" data-graph-canvas></div>
       <footer class="graph-info" data-graph-info></footer>

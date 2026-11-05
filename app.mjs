@@ -4,7 +4,8 @@ import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/docume
 import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
-import { createGraphModel, GRAPH_INDEX_PATH, parseGraphIndex } from "./core/graph-core.mjs";
+import { createGraphModel, GRAPH_INDEX_PATH, LEGACY_GRAPH_INDEX_PATH, parseGraphIndex } from "./core/graph-core.mjs";
+import { TopicIndex, TOPIC_INDEX_PATH } from "./core/topic-index.mjs";
 import { createGraphView } from "./core/graph-view.mjs";
 
 const INDEX_PATH = "viewer-index.json";
@@ -18,6 +19,10 @@ const state = {
   provider: null,
   config: null,
   index: null,
+  topicIndex: null,
+  topicPayload: null,
+  browseMode: "folders",
+  selectedTopic: null,
   cache: new DocumentCache(),
   currentDocument: null,
   currentFragment: "",
@@ -70,6 +75,134 @@ function formatSize(bytes) {
   const value = Number(bytes) || 0;
   if (value < 1024) return `${value} B`;
   return `${(value / 1024).toFixed(value < 10240 ? 1 : 0)} KB`;
+}
+
+function renderTopicCatalog(query = "") {
+  const fragment = document.createDocumentFragment();
+  const normalized = query.trim().toLocaleLowerCase("ko");
+  let visibleTopics = 0;
+  for (const group of state.topicIndex?.groups() || []) {
+    const topics = group.topics.filter((item) =>
+      !normalized || (item.name + " " + item.category).toLocaleLowerCase("ko").includes(normalized));
+    if (!topics.length) continue;
+    visibleTopics += topics.length;
+    const section = document.createElement("section");
+    section.className = "topic-group";
+    const heading = document.createElement("h2");
+    heading.textContent = group.category;
+    const chips = document.createElement("div");
+    chips.className = "topic-chip-row";
+    for (const topic of topics) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "topic-chip";
+      button.dataset.topic = topic.name;
+      const name = document.createElement("span");
+      name.textContent = "#" + topic.name;
+      const count = document.createElement("small");
+      count.textContent = String(topic.count);
+      button.append(name, count);
+      chips.append(button);
+    }
+    section.append(heading, chips);
+    fragment.append(section);
+  }
+  if (!visibleTopics) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "일치하는 주제가 없습니다.";
+    fragment.append(empty);
+  }
+  elements.topicCatalog.replaceChildren(fragment);
+  elements.documentCount.textContent = visibleTopics + "개 주제";
+}
+
+function updateTopicAvailability() {
+  const available = Boolean(state.topicIndex?.topics.length);
+  elements.topicTab.hidden = !available;
+  elements.topicCount.textContent = available ? "(" + state.topicIndex.topics.length + ")" : "";
+  if (!available) {
+    state.browseMode = "folders";
+    state.selectedTopic = null;
+  } else if (state.selectedTopic && !state.topicIndex.find(state.selectedTopic)) {
+    state.selectedTopic = null;
+  }
+}
+
+async function fetchTopicIndex(provider, { offline = false, announce = false } = {}) {
+  state.topicIndex = null;
+  state.topicPayload = null;
+  if (!offline) {
+    try {
+      const { data } = await provider.fetchJson(TOPIC_INDEX_PATH);
+      state.topicPayload = data;
+      state.topicIndex = new TopicIndex(data, state.index);
+    } catch (error) {
+      // v1-only repositories and interrupted topic refreshes keep folder browsing.
+      if (announce && !(error instanceof GitHubRequestError && error.status === 404)) {
+        showToast("주제 인덱스를 읽지 못해 폴더 탐색을 유지합니다.");
+      }
+    }
+  }
+  updateTopicAvailability();
+}
+
+function switchBrowseMode(mode) {
+  if (mode === "topics" && !state.topicIndex) return;
+  state.browseMode = mode === "topics" ? "topics" : "folders";
+  state.selectedTopic = null;
+  elements.searchInput.value = "";
+  applyFilter();
+}
+
+function openTopic(tag, { pushHistory = false } = {}) {
+  if (!state.topicIndex?.find(tag)) return;
+  state.browseMode = "topics";
+  state.selectedTopic = tag;
+  elements.searchInput.value = "";
+  applyFilter();
+  if (elements.browserScreen.hidden) showBrowser({ pushHistory });
+  window.scrollTo({ top: 0 });
+}
+
+function renderDocumentTopics(documentItem) {
+  const tags = state.topicIndex?.tagsFor(documentItem.path) || [];
+  const chips = document.createDocumentFragment();
+  for (const tag of tags) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "topic-chip";
+    button.dataset.topic = tag;
+    button.textContent = "#" + tag;
+    chips.append(button);
+  }
+  elements.documentTopicChips.replaceChildren(chips);
+  elements.documentTopics.hidden = tags.length === 0;
+
+  const related = new Map();
+  for (const tag of tags) {
+    for (const doc of state.topicIndex.documentsFor(tag)) {
+      if (doc.path === documentItem.path) continue;
+      const prior = related.get(doc.path);
+      related.set(doc.path, { doc, common: [...(prior?.common || []), tag] });
+    }
+  }
+  const matches = [...related.values()].sort((a, b) =>
+    b.common.length - a.common.length || a.doc.title.localeCompare(b.doc.title, "ko")).slice(0, 8);
+  const cards = document.createDocumentFragment();
+  for (const match of matches) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.path = match.doc.path;
+    const title = document.createElement("strong");
+    title.textContent = match.doc.title;
+    const detail = document.createElement("small");
+    detail.textContent = match.common.map((tag) => "#" + tag).join(" · ");
+    button.append(title, detail);
+    cards.append(button);
+  }
+  elements.relatedTopicDocuments.replaceChildren(cards);
+  elements.relatedTopics.hidden = matches.length === 0;
 }
 
 function renderList() {
@@ -143,15 +276,44 @@ function renderTree() {
 }
 
 function applyFilter() {
-  const query = elements.searchInput.value;
-  if (!query.trim()) {
+  if (!state.index) return;
+  const query = elements.searchInput.value.trim();
+  const topicMode = state.browseMode === "topics" && Boolean(state.topicIndex);
+  elements.folderTab.setAttribute("aria-pressed", String(!topicMode));
+  elements.topicTab.setAttribute("aria-pressed", String(topicMode));
+  elements.topicSelection.hidden = !topicMode || !state.selectedTopic;
+  elements.topicCatalog.hidden = !topicMode || Boolean(state.selectedTopic);
+  elements.searchInput.placeholder = topicMode
+    ? state.selectedTopic ? "이 주제 안에서 문서 검색" : "주제 검색"
+    : "제목·별칭·경로 검색";
+
+  if (topicMode && !state.selectedTopic) {
+    elements.documentTree.hidden = true;
+    elements.documentList.hidden = true;
+    elements.moreButton.hidden = true;
+    renderTopicCatalog(query);
+    return;
+  }
+  if (topicMode) {
+    const topic = state.topicIndex.find(state.selectedTopic);
+    elements.selectedTopicTitle.textContent = "#" + topic.name + " · " + topic.count + "개 문서";
+    const docs = state.topicIndex.documentsFor(topic.name);
+    if (query) {
+      const matchedPaths = new Set(state.index.filter(query).map((doc) => doc.path));
+      state.filteredDocuments = docs.filter((doc) => matchedPaths.has(doc.path));
+    } else {
+      state.filteredDocuments = docs;
+    }
+  } else if (query) {
+    state.filteredDocuments = state.index.filter(query);
+  }
+  if (!topicMode && !query) {
     elements.documentTree.hidden = false;
     elements.documentList.hidden = true;
     elements.moreButton.hidden = true;
-    elements.documentCount.textContent = `${state.index.documents.length}개 문서`;
+    elements.documentCount.textContent = state.index.documents.length + "개 문서";
     return;
   }
-  state.filteredDocuments = state.index.filter(query);
   state.visibleCount = PAGE_SIZE;
   elements.documentTree.hidden = true;
   elements.documentList.hidden = false;
@@ -199,6 +361,9 @@ async function connect(config, saveCredentials = true) {
   state.provider = provider;
   state.config = { ...config };
   state.index = index;
+  state.browseMode = "folders";
+  state.selectedTopic = null;
+  await fetchTopicIndex(provider, { offline });
   state.graph = null;
   state.graphLoadPromise = null;
   state.graphCenterPath = "";
@@ -226,6 +391,18 @@ async function refreshCanonicalIndex({ announce = false } = {}) {
 
     credentialStore.saveIndex(key, payload);
     state.index = nextIndex;
+    if (announce) {
+      await fetchTopicIndex(state.provider, { announce: true });
+      state.graph = null;
+      state.graphLoadPromise = null;
+    } else if (state.topicPayload) {
+      try {
+        state.topicIndex = new TopicIndex(state.topicPayload, nextIndex);
+      } catch {
+        state.topicIndex = null;
+      }
+      updateTopicAvailability();
+    }
     state.filteredDocuments = nextIndex.documents;
     state.visibleCount = PAGE_SIZE;
     renderTree();
@@ -247,6 +424,7 @@ async function refreshCanonicalIndex({ announce = false } = {}) {
         showToast(current.path === previousDocument.path ? "GitHub의 최신 문서로 갱신했습니다." : "GitHub의 이동된 문서를 열었습니다.");
       } else {
         state.currentDocument = current;
+        renderDocumentTopics(current);
       }
     }
 
@@ -276,7 +454,7 @@ async function refreshCanonicalIndex({ announce = false } = {}) {
 }
 
 function graphFilters() {
-  return { links: elements.graphLinks.checked, entities: elements.graphEntities.checked, semantic: elements.graphSemantic.checked };
+  return { links: elements.graphLinks.checked, topics: elements.graphTopics.checked };
 }
 
 function setGraphMode(mode) {
@@ -300,7 +478,13 @@ async function loadGraphIndex() {
   const key = repositoryKey();
   const load = (async () => {
     try {
-      const { data } = await state.provider.fetchJson(GRAPH_INDEX_PATH);
+      let data;
+      try {
+        ({ data } = await state.provider.fetchJson(GRAPH_INDEX_PATH));
+      } catch (error) {
+        if (!(error instanceof GitHubRequestError && error.status === 404)) throw error;
+        ({ data } = await state.provider.fetchJson(LEGACY_GRAPH_INDEX_PATH));
+      }
       credentialStore.saveGraphIndex(key, data);
       return parseGraphIndex(data);
     } catch (error) {
@@ -398,6 +582,7 @@ async function openDocument(documentItem, fragment = "", { pushHistory = true } 
   elements.documentPath.textContent = documentItem.path;
   state.currentDocument = documentItem;
   state.currentFragment = fragment;
+  renderDocumentTopics(documentItem);
   revokeObjectUrls();
   try {
     const key = repositoryKey();
@@ -450,6 +635,10 @@ const graphView = createGraphView({
     setGraphMode("local-1");
     renderGraph();
   },
+  onOpenTopic(tag) {
+    graphView.stop();
+    openTopic(tag, { pushHistory: true });
+  },
 });
 
 elements.connectForm.addEventListener("submit", async (event) => {
@@ -470,6 +659,22 @@ elements.connectForm.addEventListener("submit", async (event) => {
 elements.connectButton.addEventListener("click", () => elements.connectForm.requestSubmit());
 
 elements.searchInput.addEventListener("input", applyFilter);
+elements.folderTab.addEventListener("click", () => switchBrowseMode("folders"));
+elements.topicTab.addEventListener("click", () => switchBrowseMode("topics"));
+elements.topicBackButton.addEventListener("click", () => {
+  state.selectedTopic = null;
+  elements.searchInput.value = "";
+  applyFilter();
+});
+elements.topicCatalog.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-topic]");
+  if (button) openTopic(button.dataset.topic);
+});
+elements.documentTopicChips.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-topic]");
+  if (button) openTopic(button.dataset.topic, { pushHistory: true });
+});
+elements.relatedTopicDocuments.addEventListener("click", openSelectedDocument);
 elements.moreButton.addEventListener("click", () => {
   state.visibleCount += PAGE_SIZE;
   renderList();
@@ -502,7 +707,7 @@ elements.graphCloseButton.addEventListener("click", closeGraph);
 for (const button of document.querySelectorAll("[data-graph-mode]")) {
   button.addEventListener("click", () => { setGraphMode(button.dataset.graphMode); renderGraph(); });
 }
-for (const control of [elements.graphLinks, elements.graphEntities, elements.graphSemantic]) {
+for (const control of [elements.graphLinks, elements.graphTopics]) {
   control.addEventListener("change", renderGraph);
 }
 elements.homeButton.addEventListener("click", () => state.index ? showBrowser({ pushHistory: true }) : showOnly(elements.connectScreen));
@@ -524,6 +729,11 @@ elements.deleteCredentialsButton.addEventListener("click", async () => {
   state.provider = null;
   state.config = null;
   state.index = null;
+  state.topicIndex = null;
+  state.topicPayload = null;
+  state.selectedTopic = null;
+  state.browseMode = "folders";
+  updateTopicAvailability();
   beginNavigation();
   elements.settingsDialog.close();
   fillConnectionForm(null);

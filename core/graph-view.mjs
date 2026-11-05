@@ -12,10 +12,10 @@ function svg(name, attributes = {}) {
   return node;
 }
 function hash(value) { return [...String(value)].reduce((sum, item) => ((sum * 33) ^ item.codePointAt(0)) >>> 0, 5381); }
-function label(node) { return node.kind === "entity" ? node.label : node.title; }
+function label(node) { return node.kind === "topic" ? "#" + node.title : node.kind === "entity" ? node.label : node.title; }
 function shorten(value, length = 25) { const valueText = String(value || ""); return valueText.length > length ? `${valueText.slice(0, length - 1)}…` : valueText; }
-function color(node) { return COLORS[hash(node.kind === "entity" ? node.entity_type : node.document_type) % COLORS.length]; }
-function groupFor(node) { return node.kind === "entity" ? `Entity · ${node.entity_type || "other"}` : node.folder || node.document_type || "Other"; }
+function color(node) { return COLORS[hash(node.kind === "topic" ? node.category : node.kind === "entity" ? node.entity_type : node.document_type) % COLORS.length]; }
+function groupFor(node) { return node.kind === "topic" ? "주제 · " + (node.category || "기타") : node.kind === "entity" ? `Entity · ${node.entity_type || "other"}` : node.folder || node.document_type || "Other"; }
 function visualNodeScale(scale) { return Math.min(1.18, 1 + Math.log2(Math.max(1, scale)) * .035); }
 // 확대는 요청한 비율 그대로 적용한다. 확대 화면에는 가까운 노드만 보여도 된다.
 function presentationScale(scale) { return scale; }
@@ -118,7 +118,7 @@ function localLayout(model, viewport) {
     groups.get(key).nodes.push(node);
   }
   for (const [key, group] of groups) {
-    const count = group.nodes.length; const entity = group.kind === "entity";
+    const count = group.nodes.length; const entity = group.kind === "entity" || group.kind === "topic";
     const baseX = Math.max(54, Math.min(146, width * .22)); const baseY = Math.max(48, Math.min(102, height * .18));
     const radiusX = Math.min(width * .43, Math.max((entity ? baseX * .76 : baseX) + (group.hops - 1) * baseX * .72, 46 + count * 4.4));
     const radiusY = Math.min(height * .39, Math.max((entity ? baseY * .76 : baseY) + (group.hops - 1) * baseY * .72, 40 + count * 3.2));
@@ -131,7 +131,7 @@ function localLayout(model, viewport) {
   return { width, height, positions, clusters: [], degrees: new Map() };
 }
 
-export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
+export function createGraphView({ host, onOpenDocument, onCenterDocument, onOpenTopic }) {
   let simulation = null; let selectedId = ""; let model = null;
   const status = host.querySelector("[data-graph-status]"); const canvas = host.querySelector("[data-graph-canvas]"); const info = host.querySelector("[data-graph-info]");
   // iOS Safari는 touch-action: none만으로는 페이지 핀치 확대를 막지 않는다.
@@ -150,11 +150,14 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     info.replaceChildren();
     if (!node) { info.textContent = "노드를 탭하면 문서를 엽니다. 선택 후 ‘이 문서를 중심으로’로 Local 그래프의 중심을 바꿉니다."; return; }
     const title = document.createElement("strong"); title.textContent = label(node);
-    const meta = document.createElement("span"); meta.textContent = node.kind === "entity" ? `Entity · ${node.entity_type || "other"}` : node.path;
+    const meta = document.createElement("span"); meta.textContent = node.kind === "topic" ? "주제 · " + (node.category || "기타") + " · " + (node.document_count || 0) + "개 문서" : node.kind === "entity" ? `Entity · ${node.entity_type || "other"}` : node.path;
     info.append(title, meta);
     if (node.kind === "document") {
       const button = document.createElement("button"); button.type = "button"; button.textContent = "이 문서를 중심으로";
       button.addEventListener("click", () => onCenterDocument(node.path)); info.append(button);
+    } else if (node.kind === "topic" && onOpenTopic) {
+      const button = document.createElement("button"); button.type = "button"; button.textContent = "이 주제의 문서 보기";
+      button.addEventListener("click", () => onOpenTopic(node.title)); info.append(button);
     }
   }
   function repaint(sim) {
@@ -182,8 +185,8 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
       for (let otherIndex = index + 1; otherIndex < points.length; otherIndex += 1) {
         const other = points[otherIndex]; let dx = point.x - other.x; let dy = point.y - other.y; let distance = Math.hypot(dx, dy);
         if (distance < .01) { const angle = hash(`${point.id}:${other.id}`) * Math.PI / 180; dx = Math.cos(angle); dy = Math.sin(angle); distance = 1; }
-        const radius = point.node.kind === "entity" ? 7 : point.id === sim.centerId ? 19 : 13;
-        const otherRadius = other.node.kind === "entity" ? 7 : other.id === sim.centerId ? 19 : 13;
+        const radius = ["entity", "topic"].includes(point.node.kind) ? 7 : point.id === sim.centerId ? 19 : 13;
+        const otherRadius = ["entity", "topic"].includes(other.node.kind) ? 7 : other.id === sim.centerId ? 19 : 13;
         // 물리 배치는 카메라 배율과 무관하다. 확대 중 배율을 힘 계산에 섞으면
         // 손을 뗀 뒤 노드가 다시 튀거나 수축하는 현상이 생긴다.
         const minimum = radius + otherRadius + 8;
@@ -215,7 +218,7 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     for (const edge of sim.edges) {
       const source = sim.points.get(edge.source); const target = sim.points.get(edge.target); if (!source || !target) continue;
       const dx = target.x - source.x; const dy = target.y - source.y; const distance = Math.max(1, Math.hypot(dx, dy));
-      const desired = edge.layer === "entity" ? 108 : edge.layer === "semantic" ? 124 : 146; const force = (distance - desired) * .013 * sim.alpha;
+      const desired = ["entity", "topic"].includes(edge.layer) ? 108 : edge.layer === "semantic" ? 124 : 146; const force = (distance - desired) * .013 * sim.alpha;
       source.vx += dx / distance * force; source.vy += dy / distance * force; target.vx -= dx / distance * force; target.vy -= dy / distance * force;
     }
     for (const point of points) {
@@ -293,9 +296,9 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument }) {
     for (const node of model.nodes) {
       const initial = layout.positions.get(node.id) || { x: 600, y: 380 }; const point = { id: node.id, x: initial.x, y: initial.y, vx: 0, vy: 0, node };
       const group = svg("g", { class: `finance-graph-node ${node.kind}${node.id === model.centerId ? " current" : ""}`, transform: `translate(${point.x} ${point.y})`, tabindex: "0", role: "button", "aria-label": label(node), "data-graph-node": node.id });
-      const radius = node.kind === "entity" ? 7 : node.id === model.centerId ? 19 : model.mode === "global" ? Math.min(12, 4 + Math.log2(1 + (layout.degrees.get(node.id) || 0)) * 1.5) : 13;
+      const radius = ["entity", "topic"].includes(node.kind) ? 8 : node.id === model.centerId ? 19 : model.mode === "global" ? Math.min(12, 4 + Math.log2(1 + (layout.degrees.get(node.id) || 0)) * 1.5) : 13;
       group.append(svg("circle", { r: radius, fill: color(node) })); const title = svg("title"); title.textContent = label(node); group.append(title); const nodeLabel = svg("text", { y: radius + 18, class: "finance-graph-label" }); nodeLabel.textContent = shorten(label(node)); group.append(nodeLabel); point.labelElement = nodeLabel;
-      const open = () => { selectedId = node.id; writeInfo(node); if (node.kind === "document") onOpenDocument(node.path); };
+      const open = () => { selectedId = node.id; writeInfo(node); if (node.kind === "document") onOpenDocument(node.path); else if (node.kind === "topic") onOpenTopic?.(node.title); };
       group.addEventListener("click", open); group.addEventListener("dblclick", () => { if (node.kind === "document") onCenterDocument(node.path); }); group.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } });
       point.element = group; points.set(node.id, point); nodes.append(group);
     }
