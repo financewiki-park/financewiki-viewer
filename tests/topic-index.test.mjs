@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { TopicIndex, TOPIC_INDEX_PATH } from "../core/topic-index.mjs";
-import { createGraphModel, parseGraphIndex, GRAPH_INDEX_PATH, LEGACY_GRAPH_INDEX_PATH } from "../core/graph-core.mjs";
+import { createGraphModel, parseGraphIndex, GRAPH_INDEX_PATH } from "../core/graph-core.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const viewerIndex = { documents: [
@@ -60,7 +60,6 @@ test("v2 graph supports topic neighborhoods and optional direct-link-only view",
     ],
   });
   assert.equal(GRAPH_INDEX_PATH, ".financewiki/generated/topics/v2/graph-index.json");
-  assert.equal(LEGACY_GRAPH_INDEX_PATH, ".financewiki/generated/graph/v1/graph-index.json");
   assert.equal(graph.nodesById.get("a").document_type, "issue");
   assert.deepEqual(createGraphModel(graph, { centerPath: "wiki/a.md" }).nodes.map(n => n.id).sort(),
     ["a", "b", "c", "tag:회사채"]);
@@ -75,7 +74,7 @@ test("static shell includes topic controls, does not embed private metadata or t
     assert.match(html, new RegExp('id="' + id + '"'));
   }
   assert.match(script, /fetchJson\(TOPIC_INDEX_PATH\)/);
-  assert.match(script, /fetchJson\(LEGACY_GRAPH_INDEX_PATH\)/);
+  assert.doesNotMatch(script, /LEGACY_GRAPH_INDEX_PATH/);
   assert.match(script, /onOpenTopic\(tag\)/);
   assert.match(worker, /\.\/core\/topic-index\.mjs/);
   assert.doesNotMatch(worker, /topic-index\.json/);
