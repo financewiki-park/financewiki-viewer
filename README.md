@@ -11,7 +11,7 @@
 
 ## 그래프
 
-`.financewiki/generated/topics/v2/graph-index.json`을 요청해 직접 Wiki Link와 Topic 노드를 시각화합니다. 그래프 태그를 누르면 해당 주제의 문서 목록을 엽니다. v2가 없을 때만 기존 v1 그래프로 대체하며, 그 경우 직접 링크 탐색을 유지합니다. 그래프는 한 손가락 이동과 두 손가락 확대·축소를 지원합니다.
+`.financewiki/generated/topics/v2/graph-index.json`을 요청해 직접 Wiki Link와 Topic 노드를 시각화합니다. 그래프 태그를 누르면 해당 주제의 문서 목록을 엽니다. v2 그래프가 누락되면 오류를 표시하며 문서 목록·폴더 탐색은 계속 사용할 수 있습니다. 그래프는 한 손가락 이동과 두 손가락 확대·축소를 지원합니다.
 
 ## 개발·검증
 

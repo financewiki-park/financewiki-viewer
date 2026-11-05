@@ -3,34 +3,44 @@ import test from "node:test";
 import { createGraphModel, parseGraphIndex } from "../core/graph-core.mjs";
 
 const graph = parseGraphIndex({
-  schema_version: "1.0",
+  schema_version: "2.0",
   nodes: [
     { id: "doc:a", kind: "document", path: "a.md", title: "A" },
     { id: "doc:b", kind: "document", path: "b.md", title: "B" },
     { id: "doc:c", kind: "document", path: "c.md", title: "C" },
-    { id: "ent:x", kind: "entity", label: "X", entity_type: "company" },
+    { id: "tag:회사채", kind: "topic", title: "회사채", category: "금융시장" },
   ],
   edges: [
     { source: "doc:a", target: "doc:b", layer: "link" },
     { source: "doc:b", target: "doc:c", layer: "link" },
-    { source: "doc:a", target: "ent:x", layer: "entity" },
-    { source: "doc:a", target: "doc:c", layer: "semantic", status: "model_reviewed", review_required: false },
-    { source: "doc:b", target: "doc:c", layer: "semantic", status: "candidate", review_required: true },
+    { source: "doc:a", target: "tag:회사채", layer: "topic" },
+    { source: "doc:c", target: "tag:회사채", layer: "topic" },
   ],
 });
 
-test("Local 1 contains direct wiki links and backlinks only", () => {
-  const model = createGraphModel(graph, { centerPath: "a.md" });
-  assert.deepEqual(model.nodes.map((node) => node.id).sort(), ["doc:a", "doc:b"]);
+test("Local 1 contains directly linked Wiki documents", () => {
+  const model = createGraphModel(graph, { centerPath: "b.md" });
+  assert.deepEqual(model.nodes.map(node => node.id).sort(), ["doc:a", "doc:b", "doc:c"]);
 });
 
-test("Local 2 adds second-degree documents and optional entity overlay", () => {
-  const model = createGraphModel(graph, { centerPath: "a.md", mode: "local-2", entities: true });
-  assert.deepEqual(model.nodes.map((node) => node.id).sort(), ["doc:a", "doc:b", "doc:c", "ent:x"]);
+test("Local topic discovery links shared-tag documents", () => {
+  const model = createGraphModel(graph, { centerPath: "a.md", mode: "local-1" });
+  assert.deepEqual(model.nodes.map(node => node.id).sort(), ["doc:a", "doc:b", "doc:c", "tag:회사채"]);
+  assert.equal(model.edges.filter(edge => edge.layer === "topic").length, 2);
 });
 
-test("Global reads the full index and excludes unreviewed semantic edges", () => {
-  const model = createGraphModel(graph, { centerPath: "a.md", mode: "global", semantic: true });
-  assert.equal(model.nodes.filter((node) => node.kind === "document").length, 3);
-  assert.deepEqual(model.edges.filter((edge) => edge.layer === "semantic").map((edge) => edge.target), ["doc:c"]);
+test("Disabling topics keeps only directly linked documents", () => {
+  const model = createGraphModel(graph, { centerPath: "a.md", topics: false });
+  assert.deepEqual(model.nodes.map(node => node.id).sort(), ["doc:a", "doc:b"]);
+  assert.deepEqual(model.edges.map(edge => edge.layer), ["link"]);
+});
+
+test("Global includes all document and topic nodes", () => {
+  const model = createGraphModel(graph, { centerPath: "a.md", mode: "global" });
+  assert.equal(model.nodes.length, 4);
+  assert.equal(model.edges.length, 4);
+});
+
+test("Retired graph schema is not accepted", () => {
+  assert.throws(() => parseGraphIndex({ nodes: [], edges: [] }), /Topic Graph v2/);
 });
