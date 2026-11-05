@@ -1,15 +1,23 @@
-# financewiki-viewer
-Static iPhone viewer shell for a private FinanceWiki repository.
+# FinanceWiki Mobile Viewer
 
-## Graph View
+비공개 `financewiki-private` 문서를 GitHub 인증으로 읽는 공개 정적 iPhone/PWA shell입니다. 이 저장소에는 Markdown 원문, 주제 인덱스 데이터, PAT가 들어가지 않습니다.
 
-문서를 연 뒤 `그래프`를 누르면 GitHub 정본의
-`.financewiki/generated/graph/v1/graph-index.json`을 필요할 때만 읽는다.
-Markdown 전체를 다시 스캔하지 않으며, 인덱스는 연결 저장소별로 로컬에 보조 캐시된다.
+## 탐색
 
-- Local 1: 직접 Wiki Link와 backlink
-- Local 2: 링크 거리 2 이하
-- Global: 전체 문서 Link 그래프
-- Links / Entities / Semantic: 관계 계층별 선택 표시. Semantic은 `model_reviewed`이고 `review_required: false`인 관계만 표시
+- **폴더**: 기존 `viewer-index.json`을 이용한 문서 트리와 제목·경로 검색
+- **주제**: `.financewiki/generated/topics/v2/topic-index.json`에서 승인된 표준 태그만 읽어 범주별 탐색·태그 내 문서 검색
+- **문서**: 해시태그와 같은 주제의 관련 문서 최대 8개 표시. 원문은 클릭할 때만 인증 요청
+- 주제 인덱스를 읽을 수 없으면 폴더 탐색을 그대로 제공하고, 토큰과 데이터는 공개 호스팅 영역에 저장하지 않음
 
-그래프는 한 손가락 이동과 두 손가락 확대·축소를 지원한다. Local 보기는 처음 열 때만 짧게 약한 노드 반발력·노드 및 라벨 충돌·링크 힘으로 자리를 잡고, 확대·이동 중에는 안정된 배치를 유지한 채 카메라만 움직인다. 확대 시 13px 라벨을 표시하며 노드와 선의 화면상 크기는 과도하게 커지지 않는다. Global은 성능과 형태 안정성을 위해 폴더별 정적 군집으로 표시한다.
+## 그래프
+
+`.financewiki/generated/topics/v2/graph-index.json`을 요청해 직접 Wiki Link와 Topic 노드를 시각화합니다. 그래프 태그를 누르면 해당 주제의 문서 목록을 엽니다. v2가 없을 때만 기존 v1 그래프로 대체하며, 그 경우 직접 링크 탐색을 유지합니다. 그래프는 한 손가락 이동과 두 손가락 확대·축소를 지원합니다.
+
+## 개발·검증
+
+```bash
+node --check app.mjs
+node --test tests/*.test.mjs
+```
+
+GitHub Pages는 `.github/workflows/deploy-iphone-viewer.yml`이 `main` 변경 시 자동 배포합니다. 오직 공개 shell을 호스팅하며 데이터는 비공개 GitHub Contents API로 필요할 때 읽습니다.
