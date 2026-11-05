@@ -1,8 +1,6 @@
-// Prefer topic graph v2 while accepting legacy v1 until the publisher migrates.
 export const GRAPH_INDEX_PATH = ".financewiki/generated/topics/v2/graph-index.json";
-export const LEGACY_GRAPH_INDEX_PATH = ".financewiki/generated/graph/v1/graph-index.json";
 
-const GRAPH_LAYERS = new Set(["link", "topic", "entity", "semantic"]);
+const GRAPH_LAYERS = new Set(["link", "topic"]);
 function strings(values) { return Array.isArray(values) ? values : []; }
 function hasText(value) { return typeof value === "string" && value.trim().length > 0; }
 
@@ -12,9 +10,9 @@ export function graphVersion(index) {
 }
 
 export function parseGraphIndex(payload) {
-  if (!payload || typeof payload !== "object") throw new Error("그래프 인덱스 형식이 올바르지 않습니다.");
+  if (payload?.schema_version !== "2.0" || !Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) throw new Error("Topic Graph v2 인덱스 형식이 올바르지 않습니다.");
   const nodes = strings(payload.nodes)
-    .filter((node) => hasText(node?.id) && ["document", "topic", "entity"].includes(node.kind))
+    .filter((node) => hasText(node?.id) && ["document", "topic"].includes(node.kind))
     .map((node) => node.kind === "document" ? {
       ...node,
       document_type: node.document_type || node.type || "document",
@@ -23,18 +21,13 @@ export function parseGraphIndex(payload) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const documents = nodes.filter((node) => node.kind === "document" && hasText(node.path));
   const documentsByPath = new Map(documents.map((node) => [node.path, node]));
-  const edges = strings(payload.edges).filter((edge) => {
-    if (!GRAPH_LAYERS.has(edge?.layer) || !nodesById.has(edge.source) || !nodesById.has(edge.target)) return false;
-    return edge.layer !== "semantic" || (edge.status === "model_reviewed" && edge.review_required === false);
-  });
+  const edges = strings(payload.edges).filter((edge) =>
+    GRAPH_LAYERS.has(edge?.layer) && nodesById.has(edge.source) && nodesById.has(edge.target));
   return { version: graphVersion(payload), nodes, nodesById, documents, documentsByPath, edges };
 }
 
 function visibleEdge(edge, filters) {
-  return (edge.layer === "link" && filters.links)
-    || (edge.layer === "topic" && filters.topics)
-    || (edge.layer === "entity" && filters.entities)
-    || (edge.layer === "semantic" && filters.semantic);
+  return (edge.layer === "link" && filters.links) || (edge.layer === "topic" && filters.topics);
 }
 
 function linkNeighbors(graph, startId, depth) {
@@ -67,21 +60,11 @@ function connectedTopicIds(graph, documentIds) {
   return ids;
 }
 
-function entityIds(graph, documentIds) {
-  const ids = new Set();
-  for (const edge of graph.edges) {
-    if (edge.layer === "entity" && documentIds.has(edge.source) && graph.nodesById.get(edge.target)?.kind === "entity") ids.add(edge.target);
-  }
-  return ids;
-}
-
 export function createGraphModel(graph, options = {}) {
   const mode = ["local-1", "local-2", "global"].includes(options.mode) ? options.mode : "local-1";
   const filters = {
     links: options.links !== false,
     topics: options.topics !== false,
-    entities: options.entities === true,
-    semantic: options.semantic === true,
   };
   const center = graph.documentsByPath.get(options.centerPath);
   const documentIds = mode === "global"
@@ -107,7 +90,6 @@ export function createGraphModel(graph, options = {}) {
       }
     }
   }
-  if (filters.entities) for (const id of entityIds(graph, documentIds)) nodeIds.add(id);
   const edges = graph.edges.filter((edge) => visibleEdge(edge, filters) && nodeIds.has(edge.source) && nodeIds.has(edge.target));
 
   return {
