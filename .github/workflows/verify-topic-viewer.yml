@@ -1,0 +1,34 @@
+name: Verify FinanceWiki Topic Viewer
+
+on:
+  pull_request:
+    paths:
+      - 'app.mjs'
+      - 'index.html'
+      - 'viewer.css'
+      - 'sw.js'
+      - 'core/**'
+      - 'tests/**'
+      - '.github/workflows/verify-topic-viewer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate browser module syntax
+        run: |
+          node --check app.mjs
+          node --check core/topic-index.mjs
+          node --check core/graph-core.mjs
+          node --check core/graph-view.mjs
+          node --check sw.js
+      - name: Run graph and topic regression tests
+        run: node --test tests/*.test.mjs
