@@ -4,7 +4,7 @@ import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/docume
 import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
-import { createGraphModel, GRAPH_INDEX_PATH, LEGACY_GRAPH_INDEX_PATH, parseGraphIndex } from "./core/graph-core.mjs";
+import { createGraphModel, GRAPH_INDEX_PATH, parseGraphIndex } from "./core/graph-core.mjs";
 import { TopicIndex, TOPIC_INDEX_PATH } from "./core/topic-index.mjs";
 import { createGraphView } from "./core/graph-view.mjs";
 
@@ -478,13 +478,7 @@ async function loadGraphIndex() {
   const key = repositoryKey();
   const load = (async () => {
     try {
-      let data;
-      try {
-        ({ data } = await state.provider.fetchJson(GRAPH_INDEX_PATH));
-      } catch (error) {
-        if (!(error instanceof GitHubRequestError && error.status === 404)) throw error;
-        ({ data } = await state.provider.fetchJson(LEGACY_GRAPH_INDEX_PATH));
-      }
+      const { data } = await state.provider.fetchJson(GRAPH_INDEX_PATH);
       credentialStore.saveGraphIndex(key, data);
       return parseGraphIndex(data);
     } catch (error) {
