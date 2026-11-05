@@ -11,6 +11,7 @@ const SHELL_PATHS = [
   "./core/credential-store.mjs",
   "./core/document-cache.mjs",
   "./core/document-index.mjs",
+  "./core/topic-index.mjs",
   "./core/github-provider.mjs",
   "./core/graph-core.mjs",
   "./core/graph-view.mjs",
