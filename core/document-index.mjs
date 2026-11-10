@@ -18,6 +18,18 @@ export function isIndexDocument(document) {
   return filename === "index.md" || filename === "_index.md" || /인덱스\.md$/u.test(filename);
 }
 
+export const PINNED_WIKI_INDEX_PATH = "wiki/위키 인덱스.md";
+
+export function partitionPinnedWikiIndex(documents) {
+  const normalizedPath = normalizeLookup(PINNED_WIKI_INDEX_PATH);
+  const pinned = documents.find((document) => normalizeLookup(document?.path) === normalizedPath) ?? null;
+  if (!pinned) return { pinned: null, documents };
+  return {
+    pinned,
+    documents: documents.filter((document) => normalizeLookup(document?.path) !== normalizedPath),
+  };
+}
+
 function sortTree(node) {
   node.folders.sort((left, right) => compareItems(left.name, right.name));
   node.documents.sort((left, right) =>
@@ -87,6 +99,15 @@ export class DocumentIndex {
 
     const looksLikePath = /[\\/]/.test(pathPart) || /\.md$/i.test(pathPart);
     if (looksLikePath) {
+      const rootPath = normalizeRepositoryPath("", `/${pathPart}`);
+      if (rootPath) {
+        const rootCandidates = [rootPath.path];
+        if (!/\.md$/i.test(rootPath.path)) rootCandidates.push(`${rootPath.path}.md`);
+        for (const candidate of rootCandidates) {
+          const document = this.byPath.get(normalizeLookup(candidate));
+          if (document) return { document, fragment };
+        }
+      }
       const normalized = normalizeRepositoryPath(currentPath, pathPart);
       if (!normalized) return null;
       const candidates = [normalized.path];
@@ -95,6 +116,7 @@ export class DocumentIndex {
         const document = this.byPath.get(normalizeLookup(candidate));
         if (document) return { document, fragment };
       }
+      return null;
     }
 
     const matches = this.lookup.get(normalizeLookup(pathPart)) ?? [];

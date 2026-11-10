@@ -1,6 +1,6 @@
 import { credentialStore } from "./core/credential-store.mjs";
 import { DocumentCache } from "./core/document-cache.mjs";
-import { buildDocumentTree, DocumentIndex, isIndexDocument } from "./core/document-index.mjs";
+import { buildDocumentTree, DocumentIndex, isIndexDocument, partitionPinnedWikiIndex } from "./core/document-index.mjs";
 import { GitHubProvider, GitHubRequestError } from "./core/github-provider.mjs";
 import { renderMarkdown, sanitizeRenderedHtml } from "./core/markdown.mjs";
 import { isExternalTarget, normalizeRepositoryPath, slugifyHeading } from "./core/path-utils.mjs";
@@ -267,8 +267,10 @@ function createFolderElement(folder) {
 }
 
 function renderTree() {
-  const tree = buildDocumentTree(state.index.documents);
+  const treeDocuments = partitionPinnedWikiIndex(state.index.documents);
+  const tree = buildDocumentTree(treeDocuments.documents);
   const fragment = document.createDocumentFragment();
+  if (treeDocuments.pinned) fragment.append(createDocumentButton(treeDocuments.pinned, "tree-document"));
   for (const item of tree.documents.filter(isIndexDocument)) fragment.append(createDocumentButton(item, "tree-document"));
   for (const folder of tree.folders) fragment.append(createFolderElement(folder));
   for (const item of tree.documents.filter((item) => !isIndexDocument(item))) fragment.append(createDocumentButton(item, "tree-document"));
