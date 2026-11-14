@@ -1,8 +1,29 @@
 export const GRAPH_INDEX_PATH = ".financewiki/generated/topics/v2/graph-index.json";
 
 const GRAPH_LAYERS = new Set(["link", "topic"]);
+const BRIEFING_SCOPES = new Set(["knowledge", "recent", "all"]);
+const RECENT_BRIEFING_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 function strings(values) { return Array.isArray(values) ? values : []; }
 function hasText(value) { return typeof value === "string" && value.trim().length > 0; }
+
+export function isBriefingDocument(node) {
+  return node?.kind === "document" && String(node.path || "").replaceAll("\\", "/").startsWith("wiki/briefings/");
+}
+
+function validUtcDate(year, month, day) {
+  const value = Date.UTC(year, month - 1, day);
+  const parsed = new Date(value);
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day ? value : NaN;
+}
+
+function briefingTimestamp(node) {
+  const text = `${node?.path || ""} ${node?.title || ""}`;
+  const match = text.match(/(20\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/u)
+    || text.match(/(20\d{2})[-./](\d{1,2})[-./](\d{1,2})/u)
+    || text.match(/(20\d{2})(\d{2})(\d{2})/u);
+  return match ? validUtcDate(Number(match[1]), Number(match[2]), Number(match[3])) : NaN;
+}
 
 export function graphVersion(index) {
   if (!index || typeof index !== "object") return "";
@@ -30,7 +51,7 @@ function visibleEdge(edge, filters) {
   return (edge.layer === "link" && filters.links) || (edge.layer === "topic" && filters.topics);
 }
 
-function linkNeighbors(graph, startId, depth) {
+function linkNeighbors(graph, startId, depth, eligibleDocumentIds) {
   const ids = new Set([startId]);
   let frontier = [startId];
   for (let step = 0; step < depth && frontier.length; step += 1) {
@@ -39,7 +60,7 @@ function linkNeighbors(graph, startId, depth) {
       for (const edge of graph.edges) {
         if (edge.layer !== "link" || (edge.source !== id && edge.target !== id)) continue;
         const other = edge.source === id ? edge.target : edge.source;
-        if (graph.nodesById.get(other)?.kind !== "document" || ids.has(other)) continue;
+        if (graph.nodesById.get(other)?.kind !== "document" || !eligibleDocumentIds.has(other) || ids.has(other)) continue;
         ids.add(other);
         next.push(other);
       }
@@ -62,14 +83,24 @@ function connectedTopicIds(graph, documentIds) {
 
 export function createGraphModel(graph, options = {}) {
   const mode = ["local-1", "local-2", "global"].includes(options.mode) ? options.mode : "local-1";
+  const briefingScope = BRIEFING_SCOPES.has(options.briefings) ? options.briefings : "knowledge";
   const filters = {
     links: options.links !== false,
     topics: options.topics !== false,
   };
   const center = graph.documentsByPath.get(options.centerPath);
+  const briefingDocuments = graph.documents.filter(isBriefingDocument);
+  const datedBriefings = briefingDocuments.map(briefingTimestamp).filter(Number.isFinite);
+  const recentCutoff = datedBriefings.length ? Math.max(...datedBriefings) - (RECENT_BRIEFING_DAYS - 1) * DAY_MS : Infinity;
+  const eligibleDocumentIds = new Set(graph.documents
+    .filter((node) => !isBriefingDocument(node)
+      || briefingScope === "all"
+      || (briefingScope === "recent" && briefingTimestamp(node) >= recentCutoff)
+      || node.id === center?.id)
+    .map((node) => node.id));
   const documentIds = mode === "global"
-    ? new Set(graph.documents.map((node) => node.id))
-    : center ? linkNeighbors(graph, center.id, mode === "local-2" ? 2 : 1) : new Set();
+    ? new Set(eligibleDocumentIds)
+    : center ? linkNeighbors(graph, center.id, mode === "local-2" ? 2 : 1, eligibleDocumentIds) : new Set();
 
   const nodeIds = new Set(documentIds);
   if (filters.topics) {
@@ -84,13 +115,14 @@ export function createGraphModel(graph, options = {}) {
         const related = graph.edges
           .filter((edge) => edge.layer === "topic" && (edge.source === tag || edge.target === tag))
           .map((edge) => edge.source === tag ? edge.target : edge.source)
-          .filter((id) => graph.nodesById.get(id)?.kind === "document")
+          .filter((id) => graph.nodesById.get(id)?.kind === "document" && eligibleDocumentIds.has(id))
           .sort((a, b) => (graph.nodesById.get(a)?.title || "").localeCompare(graph.nodesById.get(b)?.title || "", "ko"));
         for (const id of related.slice(0, 24)) nodeIds.add(id);
       }
     }
   }
   const edges = graph.edges.filter((edge) => visibleEdge(edge, filters) && nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  const visibleBriefingCount = [...nodeIds].filter((id) => isBriefingDocument(graph.nodesById.get(id))).length;
 
   return {
     mode,
@@ -98,9 +130,17 @@ export function createGraphModel(graph, options = {}) {
     nodes: [...nodeIds].map((id) => graph.nodesById.get(id)).filter(Boolean),
     edges,
     filters,
+    briefingScope,
+    briefingTotal: briefingDocuments.length,
+    visibleBriefingCount,
+    hiddenBriefingCount: briefingDocuments.length - briefingDocuments.filter((node) => eligibleDocumentIds.has(node.id)).length,
+    recentBriefingDays: RECENT_BRIEFING_DAYS,
   };
 }
 
 export function graphSummary(model) {
-  return `${model.nodes.length}개 노드 · ${model.edges.length}개 관계`;
+  const hidden = model.hiddenBriefingCount > 0
+    ? ` · ${model.briefingScope === "recent" ? "오래된 " : ""}브리핑 ${model.hiddenBriefingCount}건 접힘`
+    : "";
+  return `${model.nodes.length}개 노드 · ${model.edges.length}개 관계${hidden}`;
 }

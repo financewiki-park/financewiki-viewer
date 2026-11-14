@@ -36,6 +36,7 @@ const state = {
   graph: null,
   graphLoadPromise: null,
   graphMode: "local-1",
+  graphBriefings: "knowledge",
   graphCenterPath: "",
 };
 
@@ -456,7 +457,7 @@ async function refreshCanonicalIndex({ announce = false } = {}) {
 }
 
 function graphFilters() {
-  return { links: elements.graphLinks.checked, topics: elements.graphTopics.checked };
+  return { links: elements.graphLinks.checked, topics: elements.graphTopics.checked, briefings: state.graphBriefings };
 }
 
 function setGraphMode(mode) {
@@ -468,10 +469,26 @@ function setGraphMode(mode) {
   }
 }
 
+function setGraphBriefings(scope) {
+  state.graphBriefings = ["knowledge", "recent", "all"].includes(scope) ? scope : "knowledge";
+  for (const button of document.querySelectorAll("[data-graph-briefings]")) {
+    const active = button.dataset.graphBriefings === state.graphBriefings;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+}
+
 function renderGraph() {
   if (!state.graph || !state.graphCenterPath) return;
-  const model = createGraphModel(state.graph, { mode: state.graphMode, centerPath: state.graphCenterPath, ...graphFilters() });
-  graphView.render(model, { running: state.graphMode !== "global" });
+  try {
+    const model = createGraphModel(state.graph, { mode: state.graphMode, centerPath: state.graphCenterPath, ...graphFilters() });
+    graphView.render(model, { running: state.graphMode !== "global" });
+  } catch (error) {
+    console.error("Graph rendering failed without interrupting the mobile viewer.", error);
+    graphView.clear();
+    graphView.setStatus("그래프를 표시하지 못했습니다. 문서 열람은 계속할 수 있습니다.");
+    showToast("그래프 표시 오류 · 문서 열람은 계속됩니다.");
+  }
 }
 
 async function loadGraphIndex() {
@@ -507,6 +524,7 @@ async function showGraph() {
     await loadGraphIndex();
     state.graphCenterPath = state.currentDocument.path;
     setGraphMode(state.graphMode);
+    setGraphBriefings(state.graphBriefings);
     renderGraph();
     showOnly(elements.graphScreen);
   } catch (error) {
@@ -702,6 +720,9 @@ elements.graphOpenButton.addEventListener("click", showGraph);
 elements.graphCloseButton.addEventListener("click", closeGraph);
 for (const button of document.querySelectorAll("[data-graph-mode]")) {
   button.addEventListener("click", () => { setGraphMode(button.dataset.graphMode); renderGraph(); });
+}
+for (const button of document.querySelectorAll("[data-graph-briefings]")) {
+  button.addEventListener("click", () => { setGraphBriefings(button.dataset.graphBriefings); renderGraph(); });
 }
 for (const control of [elements.graphLinks, elements.graphTopics]) {
   control.addEventListener("change", renderGraph);

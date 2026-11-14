@@ -169,12 +169,16 @@ dialog::backdrop { background: rgba(11, 22, 34, .5); }
 .graph-header strong { font-size: 1rem; }
 .graph-header span { color: var(--muted); font-size: .78rem; }
 .graph-controls { display: grid; gap: 9px; padding: 10px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
-.graph-mode-group, .graph-filter-group { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.graph-mode-group::-webkit-scrollbar, .graph-filter-group::-webkit-scrollbar { display: none; }
+.graph-mode-group, .graph-filter-group, .graph-briefing-group { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.graph-mode-group::-webkit-scrollbar, .graph-filter-group::-webkit-scrollbar, .graph-briefing-group::-webkit-scrollbar { display: none; }
 .graph-mode { flex: 0 0 auto; min-height: 36px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font-size: .86rem; font-weight: 700; }
 .graph-mode.is-active { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); background: color-mix(in srgb, var(--accent) 13%, var(--surface)); color: var(--accent-strong); }
 .graph-filter-group label { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: .84rem; font-weight: 650; }
 .graph-filter-group input { width: 18px; height: 18px; accent-color: var(--accent); }
+.graph-briefing-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
+.graph-control-label { color: var(--muted); font-size: .78rem; font-weight: 700; }
+.graph-briefing { flex: 0 0 auto; min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.graph-briefing.is-active { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); background: color-mix(in srgb, var(--accent) 13%, var(--surface)); color: var(--accent-strong); }
 .graph-legend { display: flex; gap: 8px 13px; overflow-x: auto; padding: 7px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .69rem; white-space: nowrap; scrollbar-width: none; }
 .graph-legend::-webkit-scrollbar { display: none; }
 .graph-legend span { display: inline-flex; align-items: center; gap: 4px; }

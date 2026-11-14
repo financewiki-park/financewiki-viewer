@@ -312,5 +312,10 @@ export function createGraphView({ host, onOpenDocument, onCenterDocument, onOpen
     });
     canvas.append(root); attachPanZoom(root, viewport); simulation = { points, edges, centerId: model.centerId, anchorX: layout.width / 2, anchorY: layout.height / 2, scale: 1, alpha: model.mode === "global" ? 0 : 1, frame: 0, running: false }; setLabels(simulation); repaint(simulation); writeInfo(model.nodes.find((node) => node.id === selectedId)); if (running && simulation.alpha > .035) start();
   }
-  return { render, stop, clear() { stop(); simulation = null; model = null; selectedId = ""; canvas.replaceChildren(); writeInfo(null); } };
+  return {
+    render,
+    stop,
+    clear() { stop(); simulation = null; model = null; selectedId = ""; canvas.replaceChildren(); writeInfo(null); },
+    setStatus(text) { status.textContent = text; },
+  };
 }

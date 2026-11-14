@@ -96,6 +96,14 @@
           <label><input id="graphLinks" type="checkbox" checked> Links</label>
           <label><input id="graphTopics" type="checkbox" checked> Topics</label>
         </div>
+        <div class="graph-briefing-row">
+          <span class="graph-control-label">브리핑</span>
+          <div class="graph-briefing-group" role="group" aria-label="브리핑 문서 표시 범위">
+            <button class="graph-briefing is-active" type="button" data-graph-briefings="knowledge" aria-pressed="true" title="일일·주간 브리핑은 접고 핵심 지식 문서만 표시">지식만</button>
+            <button class="graph-briefing" type="button" data-graph-briefings="recent" aria-pressed="false" title="그래프에서 가장 최근인 날짜를 기준으로 30일 이내 브리핑 표시">최근 30일</button>
+            <button class="graph-briefing" type="button" data-graph-briefings="all" aria-pressed="false" title="모든 브리핑 문서 표시">전체</button>
+          </div>
+        </div>
       </div>
       <div class="graph-legend" aria-label="그래프 범례">
         <span><i class="legend-node"></i>색 노드: 문서 유형</span>
